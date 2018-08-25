@@ -682,4 +682,6 @@ except ValueError as e:
 except IOError:
     print("The USB device stopped responding-- sure smells like we've smashed its stack. :)")
     print("Launch complete!")
-
+    while True:
+        buf = switch.read(32*1024)
+        print(buf.decode('utf-8'))
