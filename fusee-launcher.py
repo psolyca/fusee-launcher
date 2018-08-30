@@ -36,15 +36,15 @@ import platform
 
 # The address where the RCM payload is placed.
 # This is fixed for most device.
-RCM_PAYLOAD_ADDR    = 0x40010000
+RCM_PAYLOAD_ADDR    = 0x40008000
 
 # The address where the user payload is expected to begin.
-PAYLOAD_START_ADDR  = 0x40010E40
+PAYLOAD_START_ADDR  = 0x40008e40
 
 # Specify the range of addresses where we should inject oct
 # payload address.
-STACK_SPRAY_START   = 0x40014E40
-STACK_SPRAY_END     = 0x40017000
+STACK_SPRAY_START   = 0x4000ce40
+STACK_SPRAY_END     = 0x4000f000
 
 # notes:
 # GET_CONFIGURATION to the DEVICE triggers memcpy from 0x40003982
@@ -440,11 +440,11 @@ class RCMHax:
 
     # Default to the Nintendo Switch RCM VID and PID.
     DEFAULT_VID = 0x0955
-    DEFAULT_PID = 0x7321
+    DEFAULT_PID = 0x7820
 
     # Exploit specifics
     COPY_BUFFER_ADDRESSES   = [0x40005000, 0x40009000]   # The addresses of the DMA buffers we can trigger a copy _from_.
-    STACK_END               = 0x40010000                 # The address just after the end of the device's stack.
+    STACK_END               = 0x40008000                 # The address just after the end of the device's stack.
 
     def __init__(self, wait_for_device=False, os_override=None, vid=None, pid=None, override_checks=False):
         """ Set up our RCM hack connection."""
