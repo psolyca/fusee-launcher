@@ -56,5 +56,8 @@ _start:
     mov r1, #(1 << 4)
     str r1, [r0]
 
+    // uboot NOPs for some reason
+    mov r0, r0
+
 spin:
     b spin
