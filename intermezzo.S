@@ -2,62 +2,59 @@
 // Payload launcher stub.
 //
 
+#define COLOR_0 0x00F00003
+#define COLOR_1 0x0F000003
+#define COLOR_2 0xF0000003
+#define COLOR_3 0x0FF00003
+#define COLOR_4 0xF0F00003
+#define COLOR_5 0xFF000003
+#define COLOR_6 0xFFF00003
+#define COLOR_7 0xAAF00003
+#define COLOR_8 0xAFA00003
+#define COLOR_9 0xFAA00003
+#define COLOR_A 0x33300003
+#define COLOR_B 0x06F00003
+#define COLOR_C 0x14800003
+#define COLOR_D 0x00300003
+#define COLOR_E 0x03000003
+#define COLOR_F 0xB6000003
+
+#define PMC_BASE 0x7000E400
+#define _REG(base, off) ((base) + (off))
+#define PMC(off) _REG(PMC_BASE, off)
+#define PMC_SCRATCH0 0x50
+#define PMC_SCRATCH200 0x840
+
+; #define REBOOT_RCM
+
+; #define PANIC_COLOR
+
 .globl _start
 
 .section ".text"
 _start:
 
-    // First, we'll need to move ourselves _out_ of the target area.
-    // We'll copy down into the IRAM.
-    ldr r0, =INTERMEZZO_RELOCATED_ADDRESS
-    ldr r1, =post_relocation
-    ldr r2, =intermezzo_end
-    sub r2, r2, r1
-    bl  copy
+#ifdef PANIC_COLOR
+    // set panic color
+    ldr r0, = PMC(PMC_SCRATCH200)
+    mov r1, #COLOR_2
+    str r1, [r0]
+#endif
 
-    // Jump to the start of RAM, which should now contain the post-relocation code.
-    ldr r0, =INTERMEZZO_RELOCATED_ADDRESS
-    bx  r0
+    ldr r0, = PMC(PMC_SCRATCH0)
+#ifndef REBOOT_RCM
+    // clear PMC_SCRATCH0 to avoid rebooting into RCM
+    mov r1, #0
+#else
+    // set RCM bit
+    mov r1, #(1 << 1)
+#endif
+    str r1, [r0]
 
+    // reset
+    ldr r0, =PMC(0)
+    mov r1, #(1 << 4)
+    str r1, [r0]
 
-.align 4
-post_relocation:
-
-    // Next, we'll copy our payload down to the appropriate relocaiton address.
-    ldr r0, =RELOCATION_TARGET
-    ldr r1, =PAYLOAD_START_ADDR
-    ldr r2, =BEFORE_SPRAY_LENGTH
-    bl  copy
-
-    ldr r0, =RELOCATION_TARGET
-    ldr r1, =BEFORE_SPRAY_LENGTH
-    add r0, r0, r1
-    ldr r1, =STACK_SPRAY_END
-    ldr r2, =AFTER_SPRAY_LENGTH
-    bl  copy
-
-    // Finally, jump into the relocated target.
-    ldr r0, =ENTRY_POINT_ADDRESS
-    bx r0
-
-
-//
-// Simple block copy.
-//   r0 = destination address
-//   r1 = source address
-//   r2 = length in bytes
-// Destroys r0-r3.
-//
-copy:
-
-    // Copy the word...
-    ldr r3, [r1], #4
-    str r3, [r0], #4
-
-    // And continue while we have words left to copy.
-    subs r2, r2, #4
-    bne copy
-
-    // Once we're done, return.
-    bx lr
-
+spin:
+    b spin
