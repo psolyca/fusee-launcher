@@ -24,10 +24,18 @@
 #define PMC(off) _REG(PMC_BASE, off)
 #define PMC_SCRATCH0 0x50
 #define PMC_SCRATCH200 0x840
+#define PMC_RST_STATUS 0x1b4
+#define CAUSE_AOTAG 5
+#define PMC_DIRECT_THERMTRIP_CFG 0x474
+#define PMC_SENSOR_CTRL         0x1b0
+#define PMC_SENSOR_CTRL_SCRATCH_WRITE   (1 << 2)
+#define PMC_SENSOR_CTRL_ENABLE_RST  (1 << 1)
 
-; #define REBOOT_RCM
+// #define REBOOT_RCM
 
-; #define PANIC_COLOR
+#define PANIC_COLOR
+
+#define THERM_SHUTDOWN
 
 .globl _start
 
@@ -36,12 +44,21 @@ _start:
 
 #ifdef PANIC_COLOR
     // set panic color
-    ldr r0, = PMC(PMC_SCRATCH200)
+    ldr r0, =PMC(PMC_SCRATCH200)
     mov r1, #COLOR_2
     str r1, [r0]
 #endif
 
-    ldr r0, = PMC(PMC_SCRATCH0)
+#ifdef THERM_SHUTDOWN
+    ldr r0, =PMC(PMC_SENSOR_CTRL)
+    mov r1, #(PMC_SENSOR_CTRL_SCRATCH_WRITE | PMC_SENSOR_CTRL_ENABLE_RST)
+    str r1, [r0]
+    ldr r0, =PMC(PMC_RST_STATUS)
+    mov r1, #CAUSE_AOTAG
+    str r1, [r0]
+#endif
+
+    ldr r0, =PMC(PMC_SCRATCH0)
 #ifndef REBOOT_RCM
     // clear PMC_SCRATCH0 to avoid rebooting into RCM
     mov r1, #0
