@@ -33,18 +33,19 @@ import errno
 import ctypes
 import argparse
 import platform
+import binascii
 
 # The address where the RCM payload is placed.
 # This is fixed for most device.
-RCM_PAYLOAD_ADDR    = 0x40010000
+RCM_PAYLOAD_ADDR    = 0x4000a000
 
 # The address where the user payload is expected to begin.
-PAYLOAD_START_ADDR  = 0x40010E40
+PAYLOAD_START_ADDR  = 0x4000aE40
 
 # Specify the range of addresses where we should inject oct
 # payload address.
-STACK_SPRAY_START   = 0x40014E40
-STACK_SPRAY_END     = 0x40017000
+STACK_SPRAY_START   = 0x4000eE40
+STACK_SPRAY_END     = 0x40011000
 
 # notes:
 # GET_CONFIGURATION to the DEVICE triggers memcpy from 0x40003982
@@ -440,11 +441,11 @@ class RCMHax:
 
     # Default to the Nintendo Switch RCM VID and PID.
     DEFAULT_VID = 0x0955
-    DEFAULT_PID = 0x7321
+    DEFAULT_PID = 0x7330
 
     # Exploit specifics
-    COPY_BUFFER_ADDRESSES   = [0x40005000, 0x40009000]   # The addresses of the DMA buffers we can trigger a copy _from_.
-    STACK_END               = 0x40010000                 # The address just after the end of the device's stack.
+    COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40005000]   # The addresses of the DMA buffers we can trigger a copy _from_.
+    STACK_END               = 0x4000a000                 # The address just after the end of the device's stack.
 
     def __init__(self, wait_for_device=False, os_override=None, vid=None, pid=None, override_checks=False):
         """ Set up our RCM hack connection."""
@@ -504,15 +505,18 @@ class RCMHax:
         """ Writes data to the main RCM protocol endpoint. """
 
         length = len(data)
-        packet_size = 0x1000
+        packet_size = 512
+        length_sent = 0
 
         while length:
             data_to_transmit = min(length, packet_size)
+            print("txing {} bytes ({} already sent)".format(data_to_transmit, length_sent))
             length -= data_to_transmit
 
             chunk = data[:data_to_transmit]
             data  = data[data_to_transmit:]
             self.write_single_buffer(chunk)
+            length_sent += data_to_transmit
 
 
     def write_single_buffer(self, data):
@@ -599,7 +603,7 @@ except IOError as e:
 # Print the device's ID. Note that reading the device's ID is necessary to get it into
 try:
     device_id = switch.read_device_id()
-    print("Found a Tegra with Device ID: {}".format(device_id))
+    print("Found a Tegra with Device ID: {}".format(binascii.hexlify(device_id)))
 except OSError as e:
     # Raise the exception only if we're not being permissive about ID reads.
     if not arguments.permissive_id:
@@ -611,7 +615,7 @@ except OSError as e:
 
 # Use the maximum length accepted by RCM, so we can transmit as much payload as
 # we want; we'll take over before we get to the end.
-length  = 0x30298
+length  = 0x30297
 payload = length.to_bytes(4, byteorder='little')
 
 # pad out to 680 so the payload starts at the right address in IRAM
