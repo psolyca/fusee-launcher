@@ -60,7 +60,7 @@ _start:
 
     ldr r0, =PMC(PMC_SCRATCH0)
 #ifndef REBOOT_RCM
-    // clear PMC_SCRATCH0 to avoid rebooting into RCM
+    // set bit to indicate exploit success
     mov r1, #0x10000000
 #else
     // set RCM bit

