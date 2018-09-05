@@ -2,23 +2,6 @@
 // Payload launcher stub.
 //
 
-#define COLOR_0 0x00F00003
-#define COLOR_1 0x0F000003
-#define COLOR_2 0xF0000003
-#define COLOR_3 0x0FF00003
-#define COLOR_4 0xF0F00003
-#define COLOR_5 0xFF000003
-#define COLOR_6 0xFFF00003
-#define COLOR_7 0xAAF00003
-#define COLOR_8 0xAFA00003
-#define COLOR_9 0xFAA00003
-#define COLOR_A 0x33300003
-#define COLOR_B 0x06F00003
-#define COLOR_C 0x14800003
-#define COLOR_D 0x00300003
-#define COLOR_E 0x03000003
-#define COLOR_F 0xB6000003
-
 #define IROM_START 0x00100000
 #define IROM_SIZE (64 * 1024)
 
@@ -33,27 +16,21 @@
 #define _REG(base, off) ((base) + (off))
 #define PMC(off) _REG(PMC_BASE, off)
 #define PMC_SCRATCH0 0x50
-#define PMC_SCRATCH200 0x840
-#define PMC_RST_STATUS 0x1b4
-#define CAUSE_AOTAG 5
-#define PMC_DIRECT_THERMTRIP_CFG 0x474
-#define PMC_SENSOR_CTRL         0x1b0
-#define PMC_SENSOR_CTRL_SCRATCH_WRITE   (1 << 2)
-#define PMC_SENSOR_CTRL_ENABLE_RST  (1 << 1)
 
-// #define REBOOT_RCM
+#define write_ep1_in_sync (0x001069F8 + 1)
+#define usb_reset_ep1 (0x001064CA + 1)
 
-// #define PANIC_COLOR
+#define SAY_HELLO
 
-// #define THERM_SHUTDOWN
+#define REBOOT_RCM
 
 #define FILL_IRAM
 
 #define COPY_IROM_TO_IRAM
 
-.globl _start
+    .globl _start
 
-.section ".text"
+    .section ".text"
 _start:
 
 #ifdef FILL_IRAM
@@ -67,20 +44,20 @@ _start:
     bl copy
 #endif
 
-#ifdef PANIC_COLOR
-    // set panic color
-    ldr r0, =PMC(PMC_SCRATCH200)
-    mov r1, #COLOR_2
-    str r1, [r0]
-#endif
-
-#ifdef THERM_SHUTDOWN
-    ldr r0, =PMC(PMC_SENSOR_CTRL)
-    mov r1, #(PMC_SENSOR_CTRL_SCRATCH_WRITE | PMC_SENSOR_CTRL_ENABLE_RST)
-    str r1, [r0]
-    ldr r0, =PMC(PMC_RST_STATUS)
-    mov r1, #CAUSE_AOTAG
-    str r1, [r0]
+#ifdef SAY_HELLO
+    ldr r0, =hello_str
+    mov r1, #hello_str_len
+    sub r2, sp, #4
+    sub sp, sp, #4
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #4
+    mov r0, #0
+    mov r1, #1
+    ldr ip, =usb_reset_ep1
+    mov lr, pc
+    bx ip
 #endif
 
     ldr r0, =PMC(PMC_SCRATCH0)
@@ -101,19 +78,20 @@ _start:
     // uboot NOPs for some reason
     mov r0, r0
 
-spin:
-    b spin
+L_spin:
+    b L_spin
 
 
 #ifdef FILL_IRAM
+    .globl fill_iram
 fill_iram:
     ldr r0, =FILL_START
     ldr r1, =IRAM_END
-fill_word:
+L_fill_word:
     ldr r2, =#0x13371337
     str r2, [r0], #4
     cmp r0, r1
-    bne fill_word
+    bne L_fill_word
     bx lr
 #endif
 
@@ -125,6 +103,7 @@ fill_word:
 //   r2 = length in bytes
 // Destroys r0-r3.
 //
+    .globl copy
 copy:
 
     // Copy the word...
@@ -138,3 +117,15 @@ copy:
     // Once we're done, return.
     bx lr
 #endif
+
+#ifdef SAY_HELLO
+    .globl  hello_str
+    .type   hello_str, %object
+    .size   hello_str, Lhello_str_end - hello_str
+    .align 4
+hello_str:
+    .asciz "hello, world\n"
+Lhello_str_end:
+    .equ    hello_str_len, . - hello_str
+#endif
+
