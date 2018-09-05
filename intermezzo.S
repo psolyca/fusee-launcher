@@ -35,7 +35,7 @@
 
 #define PANIC_COLOR
 
-#define THERM_SHUTDOWN
+// #define THERM_SHUTDOWN
 
 .globl _start
 
@@ -60,8 +60,8 @@ _start:
 
     ldr r0, =PMC(PMC_SCRATCH0)
 #ifndef REBOOT_RCM
-    // clear PMC_SCRATCH0 to avoid rebooting into RCM
-    mov r1, #0
+    // set bit to indicate exploit success
+    mov r1, #0x00000000
 #else
     // set RCM bit
     mov r1, #(1 << 1)
