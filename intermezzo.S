@@ -31,11 +31,7 @@
 #define PMC_SENSOR_CTRL_SCRATCH_WRITE   (1 << 2)
 #define PMC_SENSOR_CTRL_ENABLE_RST  (1 << 1)
 
-// #define REBOOT_RCM
-
 #define PANIC_COLOR
-
-// #define THERM_SHUTDOWN
 
 .globl _start
 
@@ -48,7 +44,7 @@ _start:
     str r1, [r0]
 
     ldr r0, =PMC(PMC_SCRATCH0)
-    mov r1, #(1 << 1)
+    mov r1, #0
     str r1, [r0]
 
     // reset
