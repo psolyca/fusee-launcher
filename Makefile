@@ -58,7 +58,7 @@ intermezzo.elf: intermezzo.o
 	$(LD) -T intermezzo.lds --defsym LOAD_ADDR=$(INTERMEZZO_ADDRESS) $(LDFLAGS) $^ -o $@
 
 intermezzo.o: intermezzo.S
-	$(CC) $(CFLAGS32) $(DEFINES) $< -c -o $@
+	$(CC) $(CFLAGS) $(DEFINES) $< -c -o $@
 
 %.bin: %.elf
 	$(OBJCOPY) -v -O binary $< $@

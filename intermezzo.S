@@ -19,6 +19,16 @@
 #define COLOR_E 0x03000003
 #define COLOR_F 0xB6000003
 
+#define IROM_START 0x00100000
+#define IROM_SIZE (64 * 1024)
+
+#define IRAM_START 0x40000000
+#define IRAM_END (IRAM_START + 256 * 1024)
+#define MINILOADER_ENTRY 0x4000F000
+#define FILL_START (MINILOADER_ENTRY + 1024)
+
+#define IROM_COPY_ADDR 0x4002f000
+
 #define PMC_BASE 0x7000E400
 #define _REG(base, off) ((base) + (off))
 #define PMC(off) _REG(PMC_BASE, off)
@@ -37,10 +47,25 @@
 
 // #define THERM_SHUTDOWN
 
+#define FILL_IRAM
+
+#define COPY_IROM_TO_IRAM
+
 .globl _start
 
 .section ".text"
 _start:
+
+#ifdef FILL_IRAM
+    bl fill_iram
+#endif
+
+#ifdef COPY_IROM_TO_IRAM
+    ldr r0, =IROM_COPY_ADDR
+    mov r1, #IROM_START
+    mov r2, #IROM_SIZE
+    bl copy
+#endif
 
 #ifdef PANIC_COLOR
     // set panic color
@@ -78,3 +103,38 @@ _start:
 
 spin:
     b spin
+
+
+#ifdef FILL_IRAM
+fill_iram:
+    ldr r0, =FILL_START
+    ldr r1, =IRAM_END
+fill_word:
+    ldr r2, =#0x13371337
+    str r2, [r0], #4
+    cmp r0, r1
+    bne fill_word
+    bx lr
+#endif
+
+#ifdef COPY_IROM_TO_IRAM
+//
+// Simple block copy.
+//   r0 = destination address
+//   r1 = source address
+//   r2 = length in bytes
+// Destroys r0-r3.
+//
+copy:
+
+    // Copy the word...
+    ldr r3, [r1], #4
+    str r3, [r0], #4
+
+    // And continue while we have words left to copy.
+    subs r2, r2, #4
+    bne copy
+
+    // Once we're done, return.
+    bx lr
+#endif
