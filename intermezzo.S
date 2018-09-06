@@ -2,15 +2,19 @@
 // Payload launcher stub.
 //
 
-#define IROM_START 0x00100000
-#define IROM_SIZE (64 * 1024)
+#define IROM_START 0xFFF00000
+#define IROM_SIZE (48 * 1024)
 
 #define IRAM_START 0x40000000
 #define IRAM_END (IRAM_START + 256 * 1024)
-#define MINILOADER_ENTRY 0x4000F000
+#define MINILOADER_ENTRY 0x40008000
 #define FILL_START (MINILOADER_ENTRY + 1024)
 
 #define IROM_COPY_ADDR 0x4002f000
+
+#define FUSE_CHIP_START (0x7000F000 + 0x900)
+#define FUSE_CHIP_COPY_SIZE 0x100
+#define FUSE_CHIP_COPY_ADDR 0x4002e000
 
 #define PMC_BASE 0x7000E400
 #define _REG(base, off) ((base) + (off))
@@ -20,13 +24,15 @@
 #define write_ep1_in_sync (0x001069F8 + 1)
 #define usb_reset_ep1 (0x001064CA + 1)
 
-#define SAY_HELLO
+// #define SAY_HELLO
 
-#define REBOOT_RCM
+// #define REBOOT_RCM
 
 #define FILL_IRAM
 
 #define COPY_IROM_TO_IRAM
+
+#define COPY_FUSE_CHIP
 
     .globl _start
 
@@ -39,8 +45,15 @@ _start:
 
 #ifdef COPY_IROM_TO_IRAM
     ldr r0, =IROM_COPY_ADDR
-    mov r1, #IROM_START
+    ldr r1, =IROM_START
     mov r2, #IROM_SIZE
+    bl copy
+#endif
+
+#ifdef COPY_FUSE_CHIP
+    ldr r0, =FUSE_CHIP_COPY_ADDR
+    ldr r1, =FUSE_CHIP_START
+    mov r2, #FUSE_CHIP_COPY_SIZE
     bl copy
 #endif
 
@@ -95,7 +108,7 @@ L_fill_word:
     bx lr
 #endif
 
-#ifdef COPY_IROM_TO_IRAM
+#if defined(COPY_IROM_TO_IRAM) || defined(COPY_FUSE_CHIP)
 //
 // Simple block copy.
 //   r0 = destination address
