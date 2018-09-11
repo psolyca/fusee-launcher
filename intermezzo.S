@@ -36,9 +36,9 @@
 
 //#define REBOOT_RCM
 
-//#define FILL_IRAM
+#define FILL_IRAM
 
-//#define COPY_IROM_TO_IRAM
+#define COPY_IROM_TO_IRAM
 
 //#define ZERO_SCRATCH
 
@@ -98,7 +98,7 @@ _start:
     ldr r1, [r0]
 #ifndef REBOOT_RCM
     // set bit to indicate exploit success
-    mov r1, #0x80000000
+    mov r1, #0x10000000
 #else
     // set RCM bit
     orr r1, #(1 << 1)
