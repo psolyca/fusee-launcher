@@ -12,10 +12,22 @@
 
 #define IROM_COPY_ADDR 0x4002f000
 
+
 #define PMC_BASE 0x7000E400
 #define _REG(base, off) ((base) + (off))
 #define PMC(off) _REG(PMC_BASE, off)
+
 #define PMC_SCRATCH0 0x50
+#define PMC_SECURE_SCRATCH5 0xc4
+
+#define PMC_SCRATCH24 0xfc
+#define PMC_SCRATCH42 0x144
+
+#define PMC_RST_STATUS 0x1b4
+
+#define PMC_SECURE_SCRATCH6 0x224
+#define PMC_SCRATCH2_ECO 0x304
+
 
 #define write_ep1_in_sync (0x001069F8 + 1)
 #define usb_reset_ep1 (0x001064CA + 1)
@@ -28,10 +40,32 @@
 
 //#define COPY_IROM_TO_IRAM
 
+//#define ZERO_SCRATCH
+
     .globl _start
 
     .section ".text"
 _start:
+
+#ifdef ZERO_SCRATCH
+    mov r2, #0
+    ldr r0, =PMC(PMC_SCRATCH0)
+    mov r1, #(PMC(PMC_SECURE_SCRATCH5) - PMC(PMC_SCRATCH0) + 4)
+    bl zero_block
+    ldr r0, =PMC(PMC_SCRATCH24)
+    mov r1, #(PMC(PMC_SCRATCH42) - PMC(PMC_SCRATCH24) + 4)
+    bl zero_block
+    ldr r0, =PMC(PMC_SECURE_SCRATCH6)
+    mov r1, #(PMC(PMC_SCRATCH2_ECO) - PMC(PMC_SECURE_SCRATCH6) + 4)
+    bl zero_block
+    //ldr r0, =IROM_START
+    //ldr r1, =IROM_SIZE*2
+    //bl zero_block
+#endif
+
+    ldr r0, =PMC(PMC_RST_STATUS)
+    mov r1, #0
+    str r1, [r0]
 
 #ifdef FILL_IRAM
     bl fill_iram
@@ -39,7 +73,7 @@ _start:
 
 #ifdef COPY_IROM_TO_IRAM
     ldr r0, =IROM_COPY_ADDR
-    mov r1, #IROM_START
+    ldr r1, =#IROM_START
     mov r2, #IROM_SIZE
     bl copy
 #endif
@@ -61,18 +95,20 @@ _start:
 #endif
 
     ldr r0, =PMC(PMC_SCRATCH0)
+    ldr r1, [r0]
 #ifndef REBOOT_RCM
     // set bit to indicate exploit success
-    mov r1, #0x10000000
+    mov r1, #0x80000000
 #else
     // set RCM bit
-    mov r1, #(1 << 1)
+    orr r1, #(1 << 1)
 #endif
     str r1, [r0]
 
     // reset
     ldr r0, =PMC(0)
-    mov r1, #(1 << 4)
+    ldr r1, [r0]
+    orr r1, #(1 << 4)
     str r1, [r0]
 
     // uboot NOPs for some reason
@@ -113,6 +149,28 @@ copy:
     // And continue while we have words left to copy.
     subs r2, r2, #4
     bne copy
+
+    // Once we're done, return.
+    bx lr
+#endif
+
+#ifdef ZERO_SCRATCH
+//
+// Sets memory
+//   r0 = destination address
+//   r1 = length in bytes
+//   r2 = fill value
+// Destroys r0-r1.
+//
+    .globl zero_block
+zero_block:
+
+    // Store the word...
+    str r2, [r0], #4
+
+    // And continue while we have words left to copy.
+    subs r1, r1, #4
+    bne zero_block
 
     // Once we're done, return.
     bx lr

