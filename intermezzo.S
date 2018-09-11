@@ -79,10 +79,7 @@ _start:
 #endif
 
 #ifdef SAY_HELLO
-    mov r0, #0x80000001
-    push {r0}
-    push {pc}
-    mov r0, sp
+    ldr r0, =hello_str
     mov r1, #hello_str_len
     sub r2, sp, #4
     sub sp, sp, #4
