@@ -2,8 +2,8 @@
 // Payload launcher stub.
 //
 
-#define IROM_START 0x00100000
-#define IROM_SIZE (64 * 1024)
+#define IROM_START 0xfff00000
+#define IROM_SIZE (48 * 1024)
 
 #define IRAM_START 0x40000000
 #define IRAM_END (IRAM_START + 256 * 1024)
@@ -20,13 +20,13 @@
 #define write_ep1_in_sync (0x001069F8 + 1)
 #define usb_reset_ep1 (0x001064CA + 1)
 
-#define SAY_HELLO
+//#define SAY_HELLO
 
-#define REBOOT_RCM
+//#define REBOOT_RCM
 
-#define FILL_IRAM
+//#define FILL_IRAM
 
-#define COPY_IROM_TO_IRAM
+//#define COPY_IROM_TO_IRAM
 
     .globl _start
 

