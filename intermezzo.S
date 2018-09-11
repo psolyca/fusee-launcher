@@ -29,16 +29,16 @@
 #define PMC_SCRATCH2_ECO 0x304
 
 
-#define write_ep1_in_sync (0x001069F8 + 1)
-#define usb_reset_ep1 (0x001064CA + 1)
+#define write_ep1_in_sync (0xFFF05092 + 1)
+#define usb_reset_ep1 (0xFFF04996 + 1)
 
-//#define SAY_HELLO
+#define SAY_HELLO
 
-//#define REBOOT_RCM
+#define REBOOT_RCM
 
-#define FILL_IRAM
+//#define FILL_IRAM
 
-#define COPY_IROM_TO_IRAM
+//#define COPY_IROM_TO_IRAM
 
 //#define ZERO_SCRATCH
 

@@ -38,7 +38,8 @@ import binascii
 USB_XFER_MAX = 0x1000
 
 # RCM_HEADER_SIZE = 680
-RCM_HEADER_SIZE = 644
+# RCM_HEADER_SIZE = 644
+RCM_HEADER_SIZE = 116
 
 # The address where the RCM payload is placed.
 # This is fixed for most device.
@@ -718,5 +719,6 @@ except IOError:
 if arguments.tty_mode:
     while True:
         buf = switch.read(USB_XFER_MAX)
+        print(binascii.hexlify(buf))
         print(buf.decode('utf-8'))
 
