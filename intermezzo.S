@@ -28,13 +28,18 @@
 #define PMC_SECURE_SCRATCH6 0x224
 #define PMC_SCRATCH2_ECO 0x304
 
+#define FUSE_PRIVATE_KEY0 0x7000F9A4
+#define FUSE_PRIVATE_KEY4 0x7000F9B4
+#define SBK_DUMP_SIZE (FUSE_PRIVATE_KEY4 - FUSE_PRIVATE_KEY0 + 4)
 
 #define write_ep1_in_sync (0xFFF05092 + 1)
 #define usb_reset_ep1 (0xFFF04996 + 1)
 
-#define SAY_HELLO
+//#define SAY_HELLO
 
 #define REBOOT_RCM
+
+#define DUMP_SBK
 
 //#define FILL_IRAM
 
@@ -94,6 +99,27 @@ _start:
     bx ip
 #endif
 
+#ifdef DUMP_SBK
+    sub sp, sp, #SBK_DUMP_SIZE
+    mov r0, sp
+    ldr r1, =#FUSE_PRIVATE_KEY0
+    mov r2, #SBK_DUMP_SIZE
+    bl copy
+    mov r0, sp
+    mov r1, #SBK_DUMP_SIZE
+    sub r2, sp, #4
+    sub sp, sp, #4
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #4
+    mov r0, #0
+    mov r1, #1
+    ldr ip, =usb_reset_ep1
+    mov lr, pc
+    bx ip
+#endif
+
     ldr r0, =PMC(PMC_SCRATCH0)
     ldr r1, [r0]
 #ifndef REBOOT_RCM
@@ -131,7 +157,7 @@ L_fill_word:
     bx lr
 #endif
 
-#ifdef COPY_IROM_TO_IRAM
+#if defined(COPY_IROM_TO_IRAM) || defined(DUMP_SBK)
 //
 // Simple block copy.
 //   r0 = destination address
