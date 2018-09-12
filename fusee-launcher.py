@@ -39,7 +39,7 @@ USB_XFER_MAX = 0x1000
 
 # RCM_HEADER_SIZE = 680
 # RCM_HEADER_SIZE = 644
-RCM_HEADER_SIZE = 116
+RCM_HEADER_SIZE = 117
 
 # The address where the RCM payload is placed.
 # This is fixed for most device.
@@ -458,7 +458,7 @@ class RCMHax:
 
     # Default to the Nintendo Switch RCM VID and PID.
     DEFAULT_VID = 0x0955
-    DEFAULT_PID = 0x7330
+    DEFAULT_PID = 0x7820
 
     # Exploit specifics
     COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40003000]   # The addresses of the DMA buffers we can trigger a copy _from_.
