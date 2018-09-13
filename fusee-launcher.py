@@ -144,7 +144,7 @@ class HaxBackend:
         """ Set and return the device to be used """
 
         # os.environ['PYUSB_DEBUG'] = 'debug'
-        os.environ['PYUSB_DEBUG'] = 'info'
+        os.environ['PYUSB_DEBUG'] = 'debug'
         import usb
 
         self.dev = usb.core.find(idVendor=vid, idProduct=pid)
@@ -165,10 +165,15 @@ class MacOSBackend(HaxBackend):
     def trigger_vulnerability(self, length):
 
         # Triggering the vulnerability is simplest on macOS; we simply issue the control request as-is.
-        r = self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT, self.GET_STATUS, 0, 0, length)
-        print("ctrl res:")
-        print(r)
-        return r
+        try:
+            return self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT, self.GET_STATUS, 0, 0, length)
+        except Exception as err:
+            print("USBError: {}".format(err))
+            rcm_err = self.read(4)
+            print("RCM error buf: {}".format(rcm_err))
+            rcm_err_int = ctypes.c_uint32.from_buffer_copy(rcm_err).value
+            print("RCM error buf: 0x{:08x}".format(rcm_err_int))
+            raise RCMError(rcm_err_int)
 
 
 
@@ -606,6 +611,7 @@ parser.add_argument('--relocator', metavar='binary', dest='relocator', type=str,
 parser.add_argument('--override-checks', dest='skip_checks', action='store_true', help="don't check for a supported controller; useful if you've patched your EHCI driver")
 parser.add_argument('--allow-failed-id', dest='permissive_id', action='store_true', help="continue even if reading the device's ID fails; useful for development but not for end users")
 parser.add_argument('--tty', dest='tty_mode', action='store_true', help="Enable TTY mode after payload launch")
+parser.add_argument('--do-read', dest='do_read', action='store_true', help="Do a read instead of just exiting")
 arguments = parser.parse_args()
 
 # Expand out the payload path to handle any user-refrences.
@@ -627,6 +633,19 @@ try:
 except IOError as e:
     print(e)
     sys.exit(-1)
+
+stack = switch.backend.trigger_vulnerability(128)
+print(binascii.hexlify(stack))
+
+if not arguments.do_read:
+    sys.exit(0)
+
+
+buf = switch.read(16)
+print(binascii.hexlify(buf))
+sys.exit(0)
+
+# sys.exit(0)
 
 # Print the device's ID. Note that reading the device's ID is necessary to get it into
 try:
