@@ -70,6 +70,7 @@ class HaxBackend:
     """
 
     # USB constants used
+    STANDARD_REQUEST_DEVICE_TO_HOST_TO_INTERFACE = 0x81
     STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT = 0x82
     STANDARD_REQUEST_DEVICE_TO_HOST   = 0x80
     GET_DESCRIPTOR    = 0x6
@@ -165,7 +166,7 @@ class MacOSBackend(HaxBackend):
     def trigger_vulnerability(self, length):
 
         # Triggering the vulnerability is simplest on macOS; we simply issue the control request as-is.
-        return self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT, self.GET_STATUS, 0, 0, length)
+        return self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_INTERFACE, self.GET_STATUS, 0, 0, length)
 
 
 class LinuxBackend(HaxBackend):
