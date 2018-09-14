@@ -35,11 +35,11 @@
 #define write_ep1_in_sync (0xFFF05092 + 1)
 #define usb_reset_ep1 (0xFFF04996 + 1)
 
-//#define SAY_HELLO
+#define SAY_HELLO
 
-#define REBOOT_RCM
+//#define REBOOT_RCM
 
-#define DUMP_SBK
+//#define DUMP_SBK
 
 //#define FILL_IRAM
 
@@ -68,9 +68,11 @@ _start:
     //bl zero_block
 #endif
 
+#ifdef CLEAR_RESET_STATUS
     ldr r0, =PMC(PMC_RST_STATUS)
     mov r1, #0
     str r1, [r0]
+#endif
 
 #ifdef FILL_IRAM
     bl fill_iram
