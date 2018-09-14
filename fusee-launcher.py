@@ -144,7 +144,7 @@ class HaxBackend:
         """ Set and return the device to be used """
 
         # os.environ['PYUSB_DEBUG'] = 'debug'
-        os.environ['PYUSB_DEBUG'] = 'debug'
+        os.environ['PYUSB_DEBUG'] = 'info'
         import usb
 
         self.dev = usb.core.find(idVendor=vid, idProduct=pid)
@@ -165,16 +165,7 @@ class MacOSBackend(HaxBackend):
     def trigger_vulnerability(self, length):
 
         # Triggering the vulnerability is simplest on macOS; we simply issue the control request as-is.
-        try:
-            return self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT, self.GET_STATUS, 0, 0, length)
-        except Exception as err:
-            print("USBError: {}".format(err))
-            rcm_err = self.read(4)
-            print("RCM error buf: {}".format(rcm_err))
-            rcm_err_int = ctypes.c_uint32.from_buffer_copy(rcm_err).value
-            print("RCM error buf: 0x{:08x}".format(rcm_err_int))
-            raise RCMError(rcm_err_int)
-
+        return self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT, self.GET_STATUS, 0, 0, length)
 
 
 class LinuxBackend(HaxBackend):
@@ -636,16 +627,6 @@ except IOError as e:
 
 stack = switch.backend.trigger_vulnerability(128)
 print(binascii.hexlify(stack))
-
-if not arguments.do_read:
-    sys.exit(0)
-
-
-buf = switch.read(16)
-print(binascii.hexlify(buf))
-sys.exit(0)
-
-# sys.exit(0)
 
 # Print the device's ID. Note that reading the device's ID is necessary to get it into
 try:

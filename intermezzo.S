@@ -35,11 +35,11 @@
 #define write_ep1_in_sync (0xFFF05092 + 1)
 #define usb_reset_ep1 (0xFFF04996 + 1)
 
-//#define SAY_HELLO
+#define SAY_HELLO
 
 #define REBOOT_RCM
 
-#define DUMP_SBK
+// #define DUMP_SBK
 
 //#define FILL_IRAM
 
@@ -68,9 +68,11 @@ _start:
     //bl zero_block
 #endif
 
+#if 0
     ldr r0, =PMC(PMC_RST_STATUS)
     mov r1, #0
     str r1, [r0]
+#endif
 
 #ifdef FILL_IRAM
     bl fill_iram
@@ -124,7 +126,7 @@ _start:
     ldr r1, [r0]
 #ifndef REBOOT_RCM
     // set bit to indicate exploit success
-    mov r1, #0x10000000
+    orr r1, #(1 << 31)
 #else
     // set RCM bit
     orr r1, #(1 << 1)
@@ -136,9 +138,6 @@ _start:
     ldr r1, [r0]
     orr r1, #(1 << 4)
     str r1, [r0]
-
-    // uboot NOPs for some reason
-    mov r0, r0
 
 L_spin:
     b L_spin
