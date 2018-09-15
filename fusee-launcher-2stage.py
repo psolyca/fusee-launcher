@@ -264,7 +264,7 @@ class LinuxBackend(HaxBackend):
 
         # The other modules raise an IOError when the control request fails to complete. We don't fail out (as we don't bother
         # reading back), so we'll simulate the same behavior as the others.
-        raise IOError("Raising an error to match the others!")
+        # raise IOError("Raising an error to match the others!")
 
 
     def _validate_environment(self):
