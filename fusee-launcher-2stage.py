@@ -131,7 +131,7 @@ class HaxBackend:
         raise IOError("No backend to trigger the vulnerability-- it's likely we don't support your OS!")
 
 
-    def ep0_read(self, size)
+    def ep0_read(self, size):
         return s.dev.ctrl_transfer(0x81, 0, 0, 0, size)
 
     def read(self, length):
