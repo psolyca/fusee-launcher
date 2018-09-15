@@ -102,6 +102,9 @@ class HaxBackend:
         raise NotImplementedError("Trying to use an abstract backend rather than an instance of the proper subclass!")
 
 
+    def set_config(self):
+        pass
+
     @classmethod
     def supported(cls, system_override=None):
         """ Returns true iff the given backend is supported on this platform. """
@@ -213,6 +216,8 @@ class LinuxBackend(HaxBackend):
         print("A good way to ensure you're likely using an XHCI backend is to plug your")
         print("device into a blue 'USB 3' port.\n")
 
+    def set_config(self):
+        return self.dev.ctrl_transfer(0, 9, 1, 0, 0)
 
     def trigger_vulnerability(self, length):
         """
@@ -233,7 +238,7 @@ class LinuxBackend(HaxBackend):
 
         # Define the setup packet to be submitted.
         setup_packet = \
-            int.to_bytes(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT, 1, byteorder='little') + \
+            int.to_bytes(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_INTERFACE,1, byteorder='little') + \
             int.to_bytes(self.GET_STATUS,                                  1, byteorder='little') + \
             int.to_bytes(0,                                                2, byteorder='little') + \
             int.to_bytes(0,                                                2, byteorder='little') + \
@@ -632,6 +637,8 @@ except IOError as e:
 
 stack = switch.backend.trigger_vulnerability(128)
 print("stack: {}".format(binascii.hexlify(stack)))
+
+switch.backend.set_config()
 
 # Print the device's ID. Note that reading the device's ID is necessary to get it into
 try:
