@@ -28,6 +28,8 @@
 #define PMC_SECURE_SCRATCH6 0x224
 #define PMC_SCRATCH2_ECO 0x304
 
+#define APB_MISC_PP_STRAPPING_OPT_A_0 0x70000008
+
 #define FUSE_PRIVATE_KEY0 0x7000F9A4
 #define FUSE_PRIVATE_KEY4 0x7000F9B4
 #define SBK_DUMP_SIZE (FUSE_PRIVATE_KEY4 - FUSE_PRIVATE_KEY0 + 4)
@@ -35,11 +37,13 @@
 #define write_ep1_in_sync (0xFFF05092 + 1)
 #define usb_reset_ep1 (0xFFF04996 + 1)
 
+//#define CLEAR_RESET_STATUS
+
 #define SAY_HELLO
 
-#define REBOOT_RCM
+//#define REBOOT_RCM
 
-// #define DUMP_SBK
+//#define DUMP_SBK
 
 //#define FILL_IRAM
 
@@ -68,7 +72,7 @@ _start:
     //bl zero_block
 #endif
 
-#if 0
+#ifdef CLEAR_RESET_STATUS
     ldr r0, =PMC(PMC_RST_STATUS)
     mov r1, #0
     str r1, [r0]
@@ -86,6 +90,18 @@ _start:
 #endif
 
 #ifdef SAY_HELLO
+    sub sp, sp, #8
+    ldr r0, =0xDEADBEEF
+    mov r1, sp
+    bl x32_to_str
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+
     ldr r0, =hello_str
     mov r1, #hello_str_len
     sub r2, sp, #4
@@ -201,6 +217,22 @@ zero_block:
     bx lr
 #endif
 
+    .global x32_to_str
+    .type   x32_to_str, %function
+x32_to_str:
+    add r2, r0, #8
+.Lnibble_loop:
+    mov r3, r1, lsr #28
+    cmp r3, #9
+    addls   r3, r3, #48
+    addhi   r3, r3, #65
+    strb    r3, [r0]
+    add r0, r0, #1
+    cmp r0, r2
+    mov r1, r1, asl #4
+    bne .Lnibble_loop
+    bx  lr
+
 #ifdef SAY_HELLO
     .globl  hello_str
     .type   hello_str, %object
@@ -210,5 +242,14 @@ hello_str:
     .asciz "hello, world\n"
 Lhello_str_end:
     .equ    hello_str_len, . - hello_str
+
+    .globl  newline_str
+    .type   newline_str, %object
+    .size   newline_str, Lhello_str_end - newline_str
+    .align 4
+newline_str:
+    .asciz "\n"
+Lnewline_str_end:
+    .equ    newline_str_len, . - newline_str
 #endif
 
