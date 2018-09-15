@@ -131,6 +131,9 @@ class HaxBackend:
         raise IOError("No backend to trigger the vulnerability-- it's likely we don't support your OS!")
 
 
+    def ep0_read(self, size)
+        return s.dev.ctrl_transfer(0x81, 0, 0, 0, size)
+
     def read(self, length):
         """ Reads data from the RCM protocol endpoint. """
         return bytes(self.dev.read(0x81, length, 1000))
@@ -635,7 +638,7 @@ except IOError as e:
 
 # switch.backend.dev.reset()
 
-stack = switch.backend.trigger_vulnerability(128)
+stack = switch.backend.ep0_read(128)
 print("stack: {}".format(binascii.hexlify(stack)))
 
 switch.backend.set_config()
@@ -740,7 +743,7 @@ except IOError as e:
     print(e)
     sys.exit(-1)
 
-stack = switch.backend.trigger_vulnerability(128)
+stack = switch.backend.ep0_read(128)
 print("stack2: {}".format(binascii.hexlify(stack)))
 
 # Smash the device's stack, triggering the vulnerability.
