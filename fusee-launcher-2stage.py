@@ -132,7 +132,7 @@ class HaxBackend:
 
 
     def ep0_read(self, size):
-        return s.dev.ctrl_transfer(0x81, 0, 0, 0, size)
+        return self.dev.ctrl_transfer(0x81, 0, 0, 0, size)
 
     def read(self, length):
         """ Reads data from the RCM protocol endpoint. """
