@@ -10,6 +10,8 @@
 #define MINILOADER_ENTRY 0x4000F000
 #define FILL_START (MINILOADER_ENTRY + 1024)
 
+#define FLAG_ADDR (IRAM_END - 128)
+
 #define IROM_COPY_ADDR 0x4002f000
 
 
@@ -37,6 +39,8 @@
 #define write_ep1_in_sync (0xFFF05092 + 1)
 #define usb_reset_ep1 (0xFFF04996 + 1)
 
+#define DUMP_BOOT_REASON
+
 //#define CLEAR_RESET_STATUS
 
 #define SAY_HELLO
@@ -55,6 +59,90 @@
 
     .section ".text"
 _start:
+
+#ifdef DUMP_BOOT_REASON
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =0xDEADBEEF
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =PMC(PMC_RST_STATUS)
+    ldr r1, [r1]
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =PMC(PMC_SCRATCH0)
+    ldr r1, [r1]
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =APB_MISC_PP_STRAPPING_OPT_A_0
+    ldr r1, [r1]
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =FLAG_ADDR
+    ldr r1, [r1]
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =0x13371337
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+#endif
 
 #ifdef ZERO_SCRATCH
     mov r2, #0
@@ -90,18 +178,6 @@ _start:
 #endif
 
 #ifdef SAY_HELLO
-    sub sp, sp, #8
-    ldr r0, =0xDEADBEEF
-    mov r1, sp
-    bl x32_to_str
-    mov r1, #8
-    sub sp, sp, #4
-    mov r2, sp
-    ldr ip, =write_ep1_in_sync
-    mov lr, pc
-    bx ip
-    add sp, sp, #12
-
     ldr r0, =hello_str
     mov r1, #hello_str_len
     sub r2, sp, #4
@@ -138,14 +214,18 @@ _start:
     bx ip
 #endif
 
+    ldr r0, =FLAG_ADDR
+    ldr r1, =#0xBAADF00D
+    str r1, [r0]
+
     ldr r0, =PMC(PMC_SCRATCH0)
     ldr r1, [r0]
 #ifndef REBOOT_RCM
     // set bit to indicate exploit success
-    orr r1, #(1 << 31)
+    mov r1, #0x10000000
 #else
     // set RCM bit
-    orr r1, #(1 << 1)
+    mov r1, #(1 << 1)
 #endif
     str r1, [r0]
 
@@ -225,7 +305,7 @@ x32_to_str:
     mov r3, r1, lsr #28
     cmp r3, #9
     addls   r3, r3, #48
-    addhi   r3, r3, #65
+    addhi   r3, r3, #55
     strb    r3, [r0]
     add r0, r0, #1
     cmp r0, r2
