@@ -39,11 +39,11 @@
 #define write_ep1_in_sync (0xFFF05092 + 1)
 #define usb_reset_ep1 (0xFFF04996 + 1)
 
-#define DUMP_BOOT_REASON
+//#define DUMP_BOOT_REASON
 
 //#define CLEAR_RESET_STATUS
 
-#define SAY_HELLO
+//#define SAY_HELLO
 
 //#define REBOOT_RCM
 
