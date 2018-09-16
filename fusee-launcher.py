@@ -17,7 +17,7 @@
 #    TuxSH              -- for IDB notes that were nice to peek at
 #
 # much love to:
-#    Aurora Wright, Qyriad, f916253, MassExplosion213, Schala, and Levi
+#    Aurora Wright, Qyriad, f916253, MassExplosion213, and Levi
 #
 # greetings to:
 #    shuffle2
@@ -546,8 +546,8 @@ class RCMHax:
     def switch_to_highbuf(self):
         """ Switches to the higher RCM buffer, reducing the amount that needs to be copied. """
 
-        if switch.get_current_buffer_address() != self.COPY_BUFFER_ADDRESSES[1]:
-            switch.write(b'\0' * 0x1000)
+        if self.get_current_buffer_address() != self.COPY_BUFFER_ADDRESSES[1]:
+            self.write(b'\0' * 0x1000)
 
 
     def trigger_controlled_memcpy(self, length=None):
