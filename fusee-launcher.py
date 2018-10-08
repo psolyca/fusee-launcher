@@ -678,7 +678,7 @@ assert(intermezzo_size % 4 == 0)
 print("Payload offset of stack spray: 0x{:08x}".format(len(payload)))
 
 # ... insert the stack spray...
-repeat_count = int((length - USB_XFER_MAX - len(payload)) / 4)
+repeat_count = int((length - 2 * USB_XFER_MAX - len(payload)) / 4)
 print("injecting {} copies of payload address".format(repeat_count))
 payload += (RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little') * repeat_count)
 
