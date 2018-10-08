@@ -36,10 +36,18 @@
 #define FUSE_PRIVATE_KEY4 0x7000F9B4
 #define SBK_DUMP_SIZE (FUSE_PRIVATE_KEY4 - FUSE_PRIVATE_KEY0 + 4)
 
+#define FUSE_CP_REV 0x7000F990
+
 #define write_ep1_in_sync (0xFFF05092 + 1)
 #define usb_reset_ep1 (0xFFF04996 + 1)
 
+#define USB_BUFFERS_ADDR 0x400019B0
+
 #define DUMP_BOOT_REASON
+
+#define DUMP_USB_BUFFERS
+
+#define DUMP_FUSE_CP_REV
 
 //#define CLEAR_RESET_STATUS
 
@@ -133,6 +141,104 @@ _start:
     sub sp, sp, #8
     mov r0, sp
     ldr r1, =0x13371337
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+#endif
+
+#ifdef DUMP_USB_BUFFERS
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =0x55555555
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =USB_BUFFERS_ADDR
+    ldr r1, [r1]
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =(USB_BUFFERS_ADDR + 4)
+    ldr r1, [r1]
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =0xAAAAAAAA
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+#endif
+
+#ifdef DUMP_FUSE_CP_REV
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =0x11111111
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =FUSE_CP_REV
+    ldr r1, [r1]
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =0x22222222
     bl x32_to_str
     mov r0, sp
     mov r1, #8
@@ -332,4 +438,8 @@ newline_str:
 Lnewline_str_end:
     .equ    newline_str_len, . - newline_str
 #endif
+
+    .ltorg
+
+.space 0x1000+32
 

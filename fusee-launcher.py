@@ -462,7 +462,8 @@ class RCMHax:
     DEFAULT_PID = 0x7330
 
     # Exploit specifics
-    COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40003000]   # The addresses of the DMA buffers we can trigger a copy _from_.
+    # COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40003000]   # The addresses of the DMA buffers we can trigger a copy _from_.
+    COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40005000]   # The addresses of the DMA buffers we can trigger a copy _from_.
     STACK_END               = 0x4000A000                 # The address just after the end of the device's stack.
 
     def __init__(self, wait_for_device=False, os_override=None, vid=None, pid=None, override_checks=False):
@@ -529,7 +530,7 @@ class RCMHax:
 
         while length:
             data_to_transmit = min(length, packet_size)
-            print("txing {} bytes ({} already sent)".format(data_to_transmit, length_sent))
+            print("txing {} bytes ({} already sent) to buf[{}] 0x{:08x}".format(data_to_transmit, length_sent, self.current_buffer, self.get_current_buffer_address()))
             length -= data_to_transmit
 
             chunk = data[:data_to_transmit]
@@ -585,7 +586,7 @@ class RCMHax:
 
         # Determine how much we'd need to transmit to smash the full stack.
         if length is None:
-            length = self.STACK_END - self.get_current_buffer_address() - 0x20
+            length = self.STACK_END - self.get_current_buffer_address()
 
         print("sending status request with length {}".format(length))
 
@@ -723,5 +724,7 @@ if arguments.tty_mode:
     while True:
         buf = switch.read(USB_XFER_MAX)
         print(binascii.hexlify(buf))
-        print(buf.decode('utf-8'))
-
+        try:
+            print(buf.decode('utf-8'))
+        except UnicodeDecodeError:
+            pass
