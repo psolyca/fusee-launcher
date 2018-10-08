@@ -34,17 +34,30 @@ import ctypes
 import argparse
 import platform
 
+USB_XFER_MAX = 0x1000
+
+RCM_V1_HEADER_SIZE = 116
+RCM_V35_HEADER_SIZE = 628
+RCM_V40_HEADER_SIZE = 680
+
+
 # The address where the RCM payload is placed.
 # This is fixed for most device.
-RCM_PAYLOAD_ADDR    = 0x40010000
+RCM_PAYLOAD_ADDR    = 0x4000A000
 
 # The address where the user payload is expected to begin.
-PAYLOAD_START_ADDR  = 0x40010E40
+PAYLOAD_START_ADDR  = 0x4000AE40
 
 # Specify the range of addresses where we should inject oct
 # payload address.
-STACK_SPRAY_START   = 0x40014E40
-STACK_SPRAY_END     = 0x40017000
+STACK_SPRAY_START   = 0x4000EE40
+STACK_SPRAY_END     = 0x40011000
+
+class RCMError(Exception):
+    def __init__(self, rcm_error_code):
+        msg = "RCM error 0x{:08x}".format(rcm_error_code)
+        super().__init__(msg)
+        self.rcm_error_code = rcm_error_code
 
 # notes:
 # GET_CONFIGURATION to the DEVICE triggers memcpy from 0x40003982
@@ -440,7 +453,7 @@ class RCMHax:
 
     # Default to the Nintendo Switch RCM VID and PID.
     DEFAULT_VID = 0x0955
-    DEFAULT_PID = 0x7321
+    DEFAULT_PID = 0x7330
 
     # Exploit specifics
     COPY_BUFFER_ADDRESSES   = [0x40005000, 0x40009000]   # The addresses of the DMA buffers we can trigger a copy _from_.

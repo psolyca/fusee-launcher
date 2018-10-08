@@ -20,7 +20,8 @@ _start:
     bx  r0
 
 
-.align 4
+// start on a word boundry for the copy
+.p2align 2
 post_relocation:
 
     // Next, we'll copy our payload down to the appropriate relocaiton address.
@@ -60,4 +61,11 @@ copy:
 
     // Once we're done, return.
     bx lr
+
+// emit the lit pool before end padding
+litpool:
+.ltorg
+
+// end on a word boundry
+.p2align 2
 
