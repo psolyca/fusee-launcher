@@ -23,7 +23,7 @@ CFLAGS = \
 
 LDFLAGS =
 
-all: intermezzo.bin
+all: intermezzo.bin dump-sbk-via-usb.bin
 
 # The new address of the Intermezzo after copy
 INTERMEZZO_RELOCATED_ADDRESS := 0x40009000
@@ -58,7 +58,13 @@ intermezzo.elf: intermezzo.o
 	$(LD) -T intermezzo.lds --defsym LOAD_ADDR=$(INTERMEZZO_ADDRESS) $(LDFLAGS) $^ -o $@
 
 intermezzo.o: intermezzo.S
-	$(CC) $(CFLAGS32) $(DEFINES) $< -c -o $@
+	$(CC) $(CFLAGS) $(DEFINES) $< -c -o $@
+
+dump-sbk-via-usb.elf: dump-sbk-via-usb.o
+	$(LD) -T dump-sbk-via-usb.lds --defsym LOAD_ADDR=$(RELOCATION_TARGET) $(LDFLAGS) $^ -o $@
+
+dump-sbk-via-usb.o: dump-sbk-via-usb.S
+	$(CC) $(CFLAGS) $(DEFINES) $< -c -o $@
 
 %.bin: %.elf
 	$(OBJCOPY) -v -O binary $< $@

