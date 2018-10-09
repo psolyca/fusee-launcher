@@ -441,5 +441,5 @@ Lnewline_str_end:
 
     .ltorg
 
-.space 0x1000+32
+.space 70000
 
