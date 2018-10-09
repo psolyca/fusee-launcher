@@ -4,15 +4,13 @@ ENTRY(_start)
 SECTIONS
 {
 	. = LOAD_ADDR;
-	PROVIDE(intermezzo_start = .);
 
-	.text : {
-		*(.text)
+	.textrwx : {
+		*(.textrwx)
 	}
 
 	/* always end on a word boundary for our copy */
 	. = ALIGN(4);
-	PROVIDE(intermezzo_end = .);
 
 	/DISCARD/ : { *(.dynstr*) }
 	/DISCARD/ : { *(.dynamic*) }

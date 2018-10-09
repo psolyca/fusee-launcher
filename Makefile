@@ -20,6 +20,7 @@ CFLAGS = \
 	-fomit-frame-pointer \
 	-g \
 	-Os \
+	-mthumb
 
 LDFLAGS =
 
