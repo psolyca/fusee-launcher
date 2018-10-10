@@ -730,7 +730,7 @@ RCM_HEADER_SIZE = RCM_V1_HEADER_SIZE
 length  = 0x30000 + RCM_HEADER_SIZE - 0x10
 payload = length.to_bytes(4, byteorder='little')
 print("Setting rcm msg size to 0x{:08x}".format(length))
-print("RCM payload (len_insecure): {}".format(payload.hex()))
+print("RCM payload (len_insecure): {}".format(binascii.hexlify(payload)))
 
 # pad out to RCM_HEADER_SIZE so the payload starts at the right address in IRAM
 payload += b'\0' * (RCM_HEADER_SIZE - len(payload))

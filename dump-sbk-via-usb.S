@@ -320,6 +320,8 @@ _start:
     bx ip
 #endif
 
+    bl func_past_stack_overwrite
+
     ldr r0, =FLAG_ADDR
     ldr r1, =#0xBAADF00D
     str r1, [r0]
@@ -441,5 +443,23 @@ Lnewline_str_end:
 
     .ltorg
 
-# .space 70000
+    # .space 70000
+    # .space 0x8000
 
+    .globl func_past_stack_overwrite
+func_past_stack_overwrite:
+    push {lr}
+    sub sp, sp, #8
+    mov r0, sp
+    ldr r1, =0xFACEF00D
+    bl x32_to_str
+    mov r0, sp
+    mov r1, #8
+    sub sp, sp, #4
+    mov r2, sp
+    ldr ip, =write_ep1_in_sync
+    mov lr, pc
+    bx ip
+    add sp, sp, #12
+    pop {lr}
+    bx lr
