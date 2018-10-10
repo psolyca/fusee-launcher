@@ -443,8 +443,11 @@ Lnewline_str_end:
 
     .ltorg
 
-    # .space 70000
+    .space 70000
     # .space 0x8000
+    # .space 0x000049bc
+    # .space 0x000049c0
+    # .space 0x000049c4
 
     .globl func_past_stack_overwrite
 func_past_stack_overwrite:

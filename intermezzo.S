@@ -26,18 +26,18 @@ post_relocation:
     // Next, we'll copy our payload down to the appropriate relocaiton address.
     ldr r0, intermezzo_start_addr
     mov r1, #(intermezzo_end - _start)
-    add r4, r0, r1
+    add r4, r0, r1 // r4 is start of first part of user payload
     mov r1, r4
     ldr r2, payload_first_length
     bl  copy
 
+    // after copy call, r0 is pointing to word after end of first part of user payload
     ldr r2, payload_second_length
+    cmp r2, #0
     beq jump_to_payload
-    ldr r0, intermezzo_start_addr
     ldr r1, payload_first_length
-    add r0, r0, r1
-    add r1, r4, r1
-    add r1, r1, #4
+    add r1, r4, r1 // r1 points to stack overwrite word after first part of user payload
+    add r1, r1, #4 // skip stack overwrite word
     bl  copy
 
 jump_to_payload:
@@ -52,6 +52,7 @@ jump_to_payload:
 //   r1 = source address
 //   r2 = length in bytes
 // Destroys r0-r3.
+// Returns pointer to word after last copied word in r0
 //
 copy:
 
