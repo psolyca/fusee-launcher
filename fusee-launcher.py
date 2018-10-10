@@ -757,11 +757,11 @@ overwrite_payload_off = payload_overwrite_len - intermezzo_size
 print("overwrite_payload_off: 0x{:08x}".format(overwrite_payload_off))
 smash_padding = 0
 if payload_first_length < overwrite_payload_off:
-    smash_padding = overwrite_payload_off - payload_first_length - 0x100
+    smash_padding = overwrite_payload_off - payload_first_length - 4
 print("smash_padding: 0x{:08x}".format(smash_padding))
 payload += b'\0' * smash_padding
 
-payload += (RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little') * 0x4000)
+payload += RCM_PAYLOAD_ADDR.to_bytes(4, byteorder='little')
 
 # overwrite_payload_off = switch.get_overwite_payload_off(intermezzo_size)
 # smash_padding = 0
