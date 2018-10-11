@@ -38,10 +38,10 @@
 
 #define FUSE_CP_REV 0x7000F990
 
-#define write_ep1_in_sync (0xFFF05092 + 1)
-#define usb_reset_ep1 (0xFFF04996 + 1)
+#define write_ep1_in_sync (0x001069F8 + 1)
+#define usb_reset_ep1 (0x001064CA + 1)
 
-#define USB_BUFFERS_ADDR 0x400019B0
+#define USB_BUFFERS_ADDR 0x400023DC
 
 #define DUMP_BOOT_REASON
 

@@ -46,7 +46,7 @@ RCM_V4P_HEADER_SIZE = 680
 
 # The address where the RCM payload is placed.
 # This is fixed for most device.
-RCM_PAYLOAD_ADDR    = 0x4000A000
+RCM_PAYLOAD_ADDR    = 0x4000F000
 
 # The address where the user payload is expected to begin.
 PAYLOAD_START_ADDR  = 0x4000AE40
@@ -462,13 +462,13 @@ class WindowsBackend(HaxBackend):
 
 class RCMHax:
 
-    # Default to the T30 RCM VID and PID.
+    # Default to the T132 RCM VID and PID.
     DEFAULT_VID = 0x0955
-    DEFAULT_PID = 0x7330
+    DEFAULT_PID = 0x7F13
 
     # Exploit specifics
-    COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40005000]   # The addresses of the DMA buffers we can trigger a copy _from_.
-    STACK_END               = 0x4000A000                 # The address just after the end of the device's stack.
+    COPY_BUFFER_ADDRESSES   = [0x40004000, 0x40008000]   # The addresses of the DMA buffers we can trigger a copy _from_.
+    STACK_END               = 0x4000F000                 # The address just after the end of the device's stack.
 
     def __init__(self, wait_for_device=False, os_override=None, vid=None, pid=None, override_checks=False):
         """ Set up our RCM hack connection."""
@@ -725,7 +725,7 @@ with open("intermezzo_patched.bin", "wb") as f:
 # Prefix the image with an RCM command, so it winds up loaded into memory
 # at the right location (0x40010000).
 
-RCM_HEADER_SIZE = RCM_V1_HEADER_SIZE
+RCM_HEADER_SIZE = RCM_V40_HEADER_SIZE
 
 # Use the maximum length accepted by RCM, so we can transmit as much payload as
 # we want; we'll take over before we get to the end.
