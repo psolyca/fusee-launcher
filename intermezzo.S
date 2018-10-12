@@ -62,7 +62,7 @@ copy:
 
     // And continue while we have words left to copy.
     subs r2, r2, #4
-    bne copy
+    bge copy
 
     // Once we're done, return.
     bx lr

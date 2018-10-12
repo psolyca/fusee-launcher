@@ -131,7 +131,7 @@ class HaxBackend:
 
     def read(self, length):
         """ Reads data from the RCM protocol endpoint. """
-        return bytes(self.dev.read(0x81, length, 1000))
+        return bytes(self.dev.read(0x81, length, 3000))
 
 
     def read_ep0(self, length):
@@ -145,7 +145,7 @@ class HaxBackend:
         The last packet may be shorter, and should trigger a ZLP (e.g. not divisible by 512).
         If it's not, send a ZLP.
         """
-        return self.dev.write(0x01, data, 1000)
+        return self.dev.write(0x01, data, 3000)
 
 
     def find_device(self, vid=None, pid=None):
