@@ -35,6 +35,8 @@ import argparse
 import platform
 import binascii
 
+USB_XFER_MAX = 0x1000
+
 # The address where the RCM payload is placed.
 # This is fixed for most device.
 RCM_PAYLOAD_ADDR    = 0x40008000
@@ -121,7 +123,7 @@ class HaxBackend:
 
     def write_single_buffer(self, data):
         """
-        Writes a single RCM buffer, which should be 0x1000 long.
+        Writes a single RCM buffer, which should be USB_XFER_MAX long.
         The last packet may be shorter, and should trigger a ZLP (e.g. not divisible by 512).
         If it's not, send a ZLP.
         """
@@ -505,7 +507,7 @@ class RCMHax:
         """ Writes data to the main RCM protocol endpoint. """
 
         length = len(data)
-        packet_size = 0x1000
+        packet_size = USB_XFER_MAX
 
         while length:
             data_to_transmit = min(length, packet_size)
@@ -518,7 +520,7 @@ class RCMHax:
 
     def write_single_buffer(self, data):
         """
-        Writes a single RCM buffer, which should be 0x1000 long.
+        Writes a single RCM buffer, which should be USB_XFER_MAX long.
         The last packet may be shorter, and should trigger a ZLP (e.g. not divisible by 512).
         If it's not, send a ZLP.
         """
@@ -548,7 +550,7 @@ class RCMHax:
         """ Switches to the higher RCM buffer, reducing the amount that needs to be copied. """
 
         if switch.get_current_buffer_address() != self.COPY_BUFFER_ADDRESSES[1]:
-            switch.write(b'\0' * 0x1000)
+            switch.write(b'\0' * USB_XFER_MAX)
 
 
     def trigger_controlled_memcpy(self, length=None):
@@ -655,7 +657,7 @@ payload += target_payload[padding_size:]
 # Pad the payload to fill a USB request exactly, so we don't send a short
 # packet and break out of the RCM loop.
 payload_length = len(payload)
-padding_size   = 0x1000 - (payload_length % 0x1000)
+padding_size   = USB_XFER_MAX - (payload_length % USB_XFER_MAX)
 payload += (b'\0' * padding_size)
 
 # Check to see if our payload packet will fit inside the RCM high buffer.
