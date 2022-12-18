@@ -33,6 +33,7 @@ import errno
 import ctypes
 import argparse
 import platform
+import binascii
 
 # The address where the RCM payload is placed.
 # This is fixed for most device.
@@ -599,7 +600,7 @@ except IOError as e:
 # Print the device's ID. Note that reading the device's ID is necessary to get it into
 try:
     device_id = switch.read_device_id()
-    print("Found a Tegra with Device ID: {}".format(device_id))
+    print("Found a Tegra with Device ID: {}".format(binascii.hexlify(device_id)))
 except OSError as e:
     # Raise the exception only if we're not being permissive about ID reads.
     if not arguments.permissive_id:
