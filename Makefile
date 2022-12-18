@@ -7,6 +7,7 @@ LD      = $(CROSS_COMPILE)ld
 OBJCOPY = $(CROSS_COMPILE)objcopy
 
 CFLAGS = \
+	# -march=armv7 \
 	-mtune=arm7tdmi \
 	-mlittle-endian \
 	-fno-stack-protector \
@@ -23,7 +24,7 @@ CFLAGS = \
 
 LDFLAGS =
 
-all: intermezzo.bin
+all: intermezzo.bin uart_payload.bin
 
 # The new address of the Intermezzo after copy
 INTERMEZZO_RELOCATED_ADDRESS := 0x40007000
@@ -59,6 +60,12 @@ intermezzo.elf: intermezzo.o
 
 intermezzo.o: intermezzo.S
 	$(CC) $(CFLAGS32) $(DEFINES) $< -c -o $@
+
+uart_payload.elf: uart_payload.o
+	$(LD) -T uart_payload.lds --defsym LOAD_ADDR=$(ENTRY_POINT_ADDRESS) $(LDFLAGS) $^ -o $@
+
+uart_payload.o: uart_payload.c
+	$(CC) $(CFLAGS) $(DEFINES) -DUARTD $< -c -o $@
 
 %.bin: %.elf
 	$(OBJCOPY) -v -O binary $< $@
