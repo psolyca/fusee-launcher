@@ -451,8 +451,8 @@ class RCMHax:
     DEFAULT_PID = 0x7820
 
     # Exploit specifics
-    COPY_BUFFER_ADDRESSES   = [0x40005000, 0x40009000]   # The addresses of the DMA buffers we can trigger a copy _from_.
-    STACK_END               = 0x40010000                 # The address just after the end of the device's stack.
+    COPY_BUFFER_ADDRESSES   = [0x40003000, 0x40005000]   # The addresses of the DMA buffers we can trigger a copy _from_.
+    STACK_END               = 0x40008000                 # The address just after the end of the device's stack.
 
     def __init__(self, wait_for_device=False, os_override=None, vid=None, pid=None, override_checks=False):
         """ Set up our RCM hack connection."""
@@ -565,6 +565,7 @@ class RCMHax:
         if length is None:
             length = self.STACK_END - self.get_current_buffer_address()
 
+        print(f"memcpy length: {length}")
         return self.backend.trigger_vulnerability(length)
 
 

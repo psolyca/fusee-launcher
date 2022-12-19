@@ -65,7 +65,7 @@ uart_payload.elf: uart_payload.o
 	$(LD) -T uart_payload.lds --defsym LOAD_ADDR=$(ENTRY_POINT_ADDRESS) $(LDFLAGS) $^ -o $@
 
 uart_payload.o: uart_payload.c
-	$(CC) $(CFLAGS) $(DEFINES) -DUARTD $< -c -o $@
+	$(CC) $(CFLAGS) $(DEFINES) -DUARTA $< -c -o $@
 
 %.bin: %.elf
 	$(OBJCOPY) -v -O binary $< $@
