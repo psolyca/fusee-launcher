@@ -23,13 +23,16 @@ CFLAGS = \
 
 LDFLAGS =
 
-all: intermezzo.bin
+
+all: intermezzo
+
+intermezzo: intermezzo.bin
 
 intermezzo.elf: intermezzo.o
 	$(LD) -T intermezzo.lds $(LDFLAGS) $^ -o $@
 
 intermezzo.o: intermezzo.S
-	$(CC) $(CFLAGS32) $(DEFINES) $< -c -o $@
+	$(CC) $(CFLAGS) $< -c -o $@
 
 %.bin: %.elf
 	$(OBJCOPY) -v -O binary $< $@
@@ -37,4 +40,4 @@ intermezzo.o: intermezzo.S
 clean:
 	rm -f *.o *.elf *.bin
 
-.PHONY: all clean
+.PHONY: all clean intermezzo
