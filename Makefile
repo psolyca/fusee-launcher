@@ -21,8 +21,14 @@ CFLAGS = \
 	-g \
 	-Os
 
-LDFLAGS =
+LDFLAGS +=
 
+SUBDIRS := payloads
+
+TEGRA := $(filter tegra%,$(MAKECMDGOALS))
+
+$(TEGRA):
+	$(MAKE) -C $(SUBDIRS) $@
 
 all: intermezzo
 
@@ -39,5 +45,6 @@ intermezzo.o: intermezzo.S
 
 clean:
 	rm -f *.o *.elf *.bin
+	$(MAKE) -C $(SUBDIRS) clean
 
 .PHONY: all clean intermezzo
